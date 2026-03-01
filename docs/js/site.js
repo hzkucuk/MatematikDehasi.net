@@ -422,20 +422,30 @@ window.confirmFinish = async () => {
     clearInterval(state.quiz.timer);
 
     let c = 0, w = 0, mistakes = [];
+    const allResults = [];
+
     state.quiz.questions.forEach((q, i) => {
         const a = state.quiz.answers[i];
-        if (a === q.correct) c++;
-        else if (a !== undefined) {
+        const opSym = OP_MAP[q.op].symbol;
+        const n1D = q.unknownType === "n1" ? "?" : (q.n1 < 0 ? `(${q.n1})` : q.n1);
+        const n2D = q.unknownType === "n2" ? "?" : (q.n2 < 0 ? `(${q.n2})` : q.n2);
+        const qText = `${n1D} ${opSym} ${n2D} = ${q.result}`;
+
+        if (a === q.correct) {
+            c++;
+            allResults.push({ status: 'correct', q: qText, correct: q.correct, given: a });
+        } else if (a !== undefined) {
             w++;
-            const n1D = q.unknownType === "n1" ? "?" : q.n1;
-            const n2D = q.unknownType === "n2" ? "?" : (q.n2 < 0 ? `(${q.n2})` : q.n2);
-            mistakes.push({
-                q: `${n1D} ${OP_MAP[q.op].symbol} ${n2D} = ${q.result}`,
-                r: q.correct,
-                y: a
-            });
+            mistakes.push({ q: qText, r: q.correct, y: a });
+            allResults.push({ status: 'wrong', q: qText, correct: q.correct, given: a });
+        } else {
+            allResults.push({ status: 'empty', q: qText, correct: q.correct, given: null });
         }
     });
+
+    const emptyCount = TOTAL_QS - (c + w);
+    const timeTaken = document.getElementById('student-timer').innerText;
+    const pct = Math.round((c / TOTAL_QS) * 100);
 
     const result = {
         studentName: state.studentName,
@@ -444,19 +454,97 @@ window.confirmFinish = async () => {
         date: new Date().toISOString(),
         correct: c,
         wrong: w,
-        empty: TOTAL_QS - (c + w),
-        timeTaken: document.getElementById('student-timer').innerText,
+        empty: emptyCount,
+        timeTaken,
         mistakes
     };
 
     try {
         const historyRef = collection(db, 'teachers', state.teacherCode, 'history');
         await addDoc(historyRef, result);
-        alert("Test tamamlandı ve kaydedildi! ✅");
-        location.reload();
     } catch (err) {
         console.error("Sonuç kaydedilemedi:", err);
-        alert("Sonuç kaydedilemedi: " + err.message);
+    }
+
+    renderResultView(c, w, emptyCount, timeTaken, pct, allResults);
+};
+
+// ================================================================
+// Sonuç Ekranı Render
+// ================================================================
+let cachedResults = [];
+
+function renderResultView(correct, wrong, empty, time, pct, allResults) {
+    cachedResults = allResults;
+
+    let barColor = '#e74c3c';
+    if (pct >= 80) barColor = '#27ae60';
+    else if (pct >= 50) barColor = '#f39c12';
+
+    document.getElementById('result-title').textContent =
+        pct >= 80 ? '🎉 Harika Sonuç!' : pct >= 50 ? '👍 İyi Gidiyorsun!' : '💪 Çalışmaya Devam!';
+
+    document.getElementById('result-summary').innerHTML = `
+        <div class="result-stat stat-correct">
+            <span class="stat-value">${correct}</span>
+            <span class="stat-label">Doğru</span>
+        </div>
+        <div class="result-stat stat-wrong">
+            <span class="stat-value">${wrong}</span>
+            <span class="stat-label">Yanlış</span>
+        </div>
+        <div class="result-stat stat-empty">
+            <span class="stat-value">${empty}</span>
+            <span class="stat-label">Boş</span>
+        </div>
+        <div class="result-stat stat-time">
+            <span class="stat-value">⏱ ${time}</span>
+            <span class="stat-label">Süre</span>
+        </div>
+        <div style="grid-column: 1 / -1;">
+            <div class="result-score-bar">
+                <div class="result-score-fill" style="width:${pct}%; background:${barColor};"></div>
+            </div>
+            <div style="text-align:center; font-weight:700; color:${barColor}; margin-top:6px;">
+                %${pct} Başarı (${correct}/${TOTAL_QS})
+            </div>
+        </div>`;
+
+    filterResults('all');
+    switchView('view-result');
+}
+
+window.filterResults = (filter) => {
+    document.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    const container = document.getElementById('result-questions');
+    container.innerHTML = '';
+
+    cachedResults.forEach((r, i) => {
+        if (filter !== 'all' && r.status !== filter) return;
+
+        const div = document.createElement('div');
+        div.className = `result-item ri-${r.status}`;
+
+        let answerHtml = '';
+        if (r.status === 'correct') {
+            answerHtml = `<span class="ri-correct-val">✅ ${r.correct}</span>`;
+        } else if (r.status === 'wrong') {
+            answerHtml = `<span class="ri-wrong-val">${r.given}</span> <span class="ri-correct-val">→ ${r.correct}</span>`;
+        } else {
+            answerHtml = `<span style="color:#95a5a6;">—</span> <span class="ri-correct-val">→ ${r.correct}</span>`;
+        }
+
+        div.innerHTML = `
+            <span class="ri-num">${i + 1}.</span>
+            <span class="ri-question">${r.q}</span>
+            <span class="ri-answer">${answerHtml}</span>`;
+        container.appendChild(div);
+    });
+
+    if (container.children.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#aaa; padding:20px;">Bu kategoride soru yok 🎉</p>';
     }
 };
 

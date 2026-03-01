@@ -144,6 +144,28 @@
             <button class="btn btn-primary" id="btn-next" onclick="changePage(1)" style="width:auto">İleri</button>
         </div>
     </section>
+
+    <!-- ========== SONUÇ EKRANI ========== -->
+    <section id="view-result" class="view-section">
+        <div class="auth-card" style="max-width:700px;">
+            <h2 id="result-title">📊 Sınav Sonucun</h2>
+
+            <div class="result-summary" id="result-summary"></div>
+
+            <div class="result-tabs">
+                <button class="result-tab active" onclick="filterResults('all')">Tümü</button>
+                <button class="result-tab" onclick="filterResults('wrong')">❌ Yanlışlar</button>
+                <button class="result-tab" onclick="filterResults('empty')">⬜ Boşlar</button>
+                <button class="result-tab" onclick="filterResults('correct')">✅ Doğrular</button>
+            </div>
+
+            <div id="result-questions"></div>
+
+            <div style="margin-top:30px; display:flex; gap:10px;">
+                <button class="btn btn-primary" style="flex:1" onclick="location.reload()">🏠 Ana Sayfa</button>
+            </div>
+        </div>
+    </section>
 </div>
 
 <!-- MODAL -->
