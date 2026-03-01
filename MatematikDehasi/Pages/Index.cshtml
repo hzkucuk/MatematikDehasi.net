@@ -43,6 +43,18 @@
                 <input type="password" id="reg-master" placeholder="Kurum Kayıt Şifresi">
                 <div class="form-section-label">👤 Kişisel Bilgiler</div>
                 <input type="text" id="reg-name" placeholder="Adınız Soyadınız" maxlength="50">
+                <div class="form-section-label">🏫 Sınıf Düzeyi</div>
+                <select id="reg-grade">
+                    <option value="">Sınıf Seçin...</option>
+                    <option value="1">1. Sınıf</option>
+                    <option value="2">2. Sınıf</option>
+                    <option value="3">3. Sınıf</option>
+                    <option value="4">4. Sınıf</option>
+                    <option value="5">5. Sınıf</option>
+                    <option value="6">6. Sınıf</option>
+                    <option value="7">7. Sınıf</option>
+                    <option value="8">8. Sınıf</option>
+                </select>
                 <input type="password" id="reg-pin" placeholder="Şifre (en az 4 karakter)">
                 <input type="password" id="reg-pin2" placeholder="Şifre Tekrar">
                 <button class="btn btn-primary" onclick="registerTeacher()">Kayıt Ol</button>
@@ -55,9 +67,10 @@
     <section id="view-teacher-code" class="view-section">
         <div class="auth-card">
             <h2>✅ Kayıt Başarılı!</h2>
-            <p>Sınıf kodunuz:</p>
+            <p><strong id="display-grade"></strong> için sınıf kodunuz:</p>
             <div class="code-display" id="display-code">XXX-XXX</div>
             <p class="code-hint">Bu kodu öğrencilerinize verin. Tahtaya yazabilir veya mesaj gönderebilirsiniz.</p>
+            <p class="code-hint"><em>Birden fazla sınıfınız varsa her sınıf için ayrı kayıt yaparak farklı kodlar oluşturabilirsiniz.</em></p>
             <button class="btn btn-primary" onclick="switchView('view-home')" style="max-width:300px; margin:20px auto 0;">Ana Sayfaya Dön</button>
         </div>
     </section>
@@ -109,21 +122,16 @@
             <div class="form-card">
                 <input type="text" id="student-code-input" placeholder="Öğretmen Kodunu Gir (ör: K7M-3P9)" maxlength="7"
                        style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
-                <input type="text" id="student-name-input" list="recent-students-list" placeholder="İsmini Yaz">
-                <datalist id="recent-students-list"></datalist>
+                <button class="btn btn-secondary" id="btn-validate-code" onclick="validateStudentCode()">🔍 Kodu Doğrula</button>
 
-                <select id="operation-select">
-                    <option value="addition">Toplama (+)</option>
-                    <option value="subtraction">Çıkarma (-)</option>
-                    <option value="multiplication">Çarpma (×)</option>
-                    <option value="division">Bölme (÷)</option>
-                    <option value="mixed_equations">Denklem Çözme (4 İşlem Karışık)</option>
-                </select>
-                <label class="checkbox-group">
-                    <input type="checkbox" id="integer-mode-check">
-                    Tam Sayılar (Negatifler Dahil)
-                </label>
-                <button class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
+                <div id="student-grade-info" style="display:none;">
+                    <div class="grade-info-card" id="grade-info-card"></div>
+                    <input type="text" id="student-name-input" list="recent-students-list" placeholder="İsmini Yaz">
+                    <datalist id="recent-students-list"></datalist>
+                    <select id="operation-select"></select>
+                    <button class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
+                </div>
+
                 <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
             </div>
         </div>

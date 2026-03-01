@@ -230,6 +230,17 @@ input:focus, select:focus { border-color: var(--primary); }
 .badge-times { background: #9b59b6; }
 .badge-divide { background: #1abc9c; }
 .badge-integer { background: #34495e; }
+.badge-grade { background: #8e44ad; }
+
+.grade-info-card {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 1.05rem;
+    margin: 12px 0;
+    text-align: center;
+}
 .badge-mixed { background: #f39c12; }
 
 @media (max-width: 768px) {

@@ -41,11 +41,11 @@ let state = {
     teacherName: "",
     studentName: "",
     operation: "addition",
-    isIntegerMode: false,
+    grade: 0,
+    totalQs: 20,
     quiz: { questions: [], answers: {}, page: 0, seconds: 0, timer: null }
 };
 
-const TOTAL_QS = 40;
 const PAGE_SIZE = 10;
 
 const OP_MAP = {
@@ -54,6 +54,84 @@ const OP_MAP = {
     multiplication: { symbol: '×', label: 'Çarpma', badge: 'badge-times' },
     division: { symbol: '÷', label: 'Bölme', badge: 'badge-divide' },
     mixed_equations: { symbol: '?', label: 'Denklem Çözme', badge: 'badge-mixed' }
+};
+
+// ================================================================
+// MEB Müfredatı — Sınıf Düzeyi Konfigürasyonu
+// ================================================================
+const GRADE_CONFIG = {
+    1: {
+        label: '1. Sınıf',
+        operations: ['addition', 'subtraction'],
+        questionCount: 20,
+        addition:    { n1Min: 1,  n1Max: 10,   n2Min: 1,  n2Max: 10 },
+        subtraction: { n1Min: 1,  n1Max: 20,   n2Min: 1,  n2Max: 10,  noNegResult: true }
+    },
+    2: {
+        label: '2. Sınıf',
+        operations: ['addition', 'subtraction', 'multiplication'],
+        questionCount: 20,
+        addition:       { n1Min: 10, n1Max: 99,   n2Min: 1,   n2Max: 99 },
+        subtraction:    { n1Min: 10, n1Max: 99,   n2Min: 1,   n2Max: 99,  noNegResult: true },
+        multiplication: { n1Min: 2,  n1Max: 5,    n2Min: 1,   n2Max: 10 }
+    },
+    3: {
+        label: '3. Sınıf',
+        operations: ['addition', 'subtraction', 'multiplication', 'division'],
+        questionCount: 20,
+        addition:       { n1Min: 100, n1Max: 999,  n2Min: 10,  n2Max: 999 },
+        subtraction:    { n1Min: 100, n1Max: 999,  n2Min: 10,  n2Max: 999, noNegResult: true },
+        multiplication: { n1Min: 2,   n1Max: 10,   n2Min: 2,   n2Max: 10 },
+        division:       { divMin: 2,  divMax: 10,  quotMin: 2,  quotMax: 10 }
+    },
+    4: {
+        label: '4. Sınıf',
+        operations: ['addition', 'subtraction', 'multiplication', 'division'],
+        questionCount: 30,
+        addition:       { n1Min: 1000, n1Max: 9999,  n2Min: 100,  n2Max: 9999 },
+        subtraction:    { n1Min: 1000, n1Max: 9999,  n2Min: 100,  n2Max: 9999, noNegResult: true },
+        multiplication: { n1Min: 10,   n1Max: 99,    n2Min: 2,    n2Max: 20 },
+        division:       { divMin: 2,   divMax: 20,   quotMin: 10,  quotMax: 99 }
+    },
+    5: {
+        label: '5. Sınıf',
+        operations: ['addition', 'subtraction', 'multiplication', 'division'],
+        questionCount: 30,
+        addition:       { n1Min: 1000,  n1Max: 99999, n2Min: 1000, n2Max: 99999 },
+        subtraction:    { n1Min: 1000,  n1Max: 99999, n2Min: 1000, n2Max: 99999, noNegResult: true },
+        multiplication: { n1Min: 10,    n1Max: 999,   n2Min: 2,    n2Max: 99 },
+        division:       { divMin: 2,    divMax: 99,   quotMin: 10,  quotMax: 999 }
+    },
+    6: {
+        label: '6. Sınıf',
+        operations: ['addition', 'subtraction', 'multiplication', 'division'],
+        questionCount: 30,
+        useNegatives: true,
+        addition:       { n1Min: -50,  n1Max: 50,  n2Min: -50, n2Max: 50 },
+        subtraction:    { n1Min: -50,  n1Max: 50,  n2Min: -50, n2Max: 50 },
+        multiplication: { n1Min: -12,  n1Max: 12,  n2Min: -12, n2Max: 12 },
+        division:       { divMin: 2,   divMax: 12,  quotMin: -12, quotMax: 12, negDiv: true }
+    },
+    7: {
+        label: '7. Sınıf',
+        operations: ['addition', 'subtraction', 'multiplication', 'division', 'mixed_equations'],
+        questionCount: 40,
+        useNegatives: true,
+        addition:       { n1Min: -100, n1Max: 100, n2Min: -100, n2Max: 100 },
+        subtraction:    { n1Min: -100, n1Max: 100, n2Min: -100, n2Max: 100 },
+        multiplication: { n1Min: -20,  n1Max: 20,  n2Min: -20,  n2Max: 20 },
+        division:       { divMin: 2,   divMax: 15,  quotMin: -20, quotMax: 20, negDiv: true }
+    },
+    8: {
+        label: '8. Sınıf',
+        operations: ['addition', 'subtraction', 'multiplication', 'division', 'mixed_equations'],
+        questionCount: 40,
+        useNegatives: true,
+        addition:       { n1Min: -200, n1Max: 200, n2Min: -200, n2Max: 200 },
+        subtraction:    { n1Min: -200, n1Max: 200, n2Min: -200, n2Max: 200 },
+        multiplication: { n1Min: -25,  n1Max: 25,  n2Min: -25,  n2Max: 25 },
+        division:       { divMin: 2,   divMax: 20,  quotMin: -25, quotMax: 25, negDiv: true }
+    }
 };
 
 // ================================================================
@@ -84,11 +162,13 @@ window.switchView = switchView;
 window.registerTeacher = async () => {
     const masterPin = document.getElementById('reg-master').value;
     const name = document.getElementById('reg-name').value.trim();
+    const grade = parseInt(document.getElementById('reg-grade').value);
     const pin = document.getElementById('reg-pin').value;
     const pin2 = document.getElementById('reg-pin2').value;
 
     if (!masterPin) return alert("Kurum kayıt şifresini girin.");
     if (!name) return alert("Lütfen adınızı girin.");
+    if (!grade || grade < 1 || grade > 8) return alert("Lütfen sınıf düzeyi seçin (1-8).");
     if (pin.length < 4) return alert("Şifre en az 4 karakter olmalı.");
     if (pin !== pin2) return alert("Şifreler eşleşmiyor.");
 
@@ -127,11 +207,13 @@ window.registerTeacher = async () => {
     try {
         await setDoc(doc(db, 'teachers', code), {
             name: name,
+            grade: grade,
             pin: pin,
             createdAt: new Date().toISOString()
         });
 
         document.getElementById('display-code').textContent = formatCode(code);
+        document.getElementById('display-grade').textContent = GRADE_CONFIG[grade].label;
         switchView('view-teacher-code');
     } catch (err) {
         console.error("Kayıt hatası:", err);
@@ -161,9 +243,11 @@ window.teacherLogin = async () => {
 
         state.teacherCode = code;
         state.teacherName = data.name;
+        state.grade = data.grade || 1;
 
+        const gradeLabel = GRADE_CONFIG[state.grade]?.label || `${state.grade}. Sınıf`;
         document.getElementById('teacher-panel-title').textContent = `${data.name} - Öğretmen Paneli 👨‍🏫`;
-        document.getElementById('panel-code-badge').textContent = `KOD: ${formatCode(code)}`;
+        document.getElementById('panel-code-badge').textContent = `${gradeLabel} | KOD: ${formatCode(code)}`;
 
         switchView('view-teacher-panel');
         await loadTeacherHistory();
@@ -198,27 +282,51 @@ window.updatePin = async () => {
 };
 
 // ================================================================
-// ÖĞRENCİ GİRİŞ
+// ÖĞRENCİ GİRİŞ — 2 Aşamalı: Kod Doğrula → Teste Başla
 // ================================================================
-window.studentLogin = async () => {
+window.validateStudentCode = async () => {
     const rawCode = document.getElementById('student-code-input').value;
     const code = cleanCode(rawCode);
-    const name = document.getElementById('student-name-input').value.trim();
 
     if (code.length !== 6) return alert("Geçersiz öğretmen kodu. 6 karakterli kodu girin.");
-    if (!name) return alert("Lütfen ismini gir.");
 
-    // Öğretmen kodunu doğrula
     try {
         const docRef = doc(db, 'teachers', code);
         const snap = await getDoc(docRef);
         if (!snap.exists()) return alert("Bu öğretmen kodu bulunamadı. Kodunu kontrol et.");
+
+        const data = snap.data();
+        const grade = data.grade || 1;
+        const gc = GRADE_CONFIG[grade];
+
+        state.teacherCode = code;
+        state.grade = grade;
+
+        document.getElementById('grade-info-card').innerHTML =
+            `📚 <strong>${gc.label}</strong> — Öğretmen: ${data.name}`;
+
+        const select = document.getElementById('operation-select');
+        select.innerHTML = '';
+        gc.operations.forEach(op => {
+            const option = document.createElement('option');
+            option.value = op;
+            option.textContent = `${OP_MAP[op].label} (${OP_MAP[op].symbol})`;
+            select.appendChild(option);
+        });
+
+        document.getElementById('student-grade-info').style.display = 'block';
+        document.getElementById('btn-validate-code').style.display = 'none';
+        document.getElementById('student-code-input').readOnly = true;
     } catch (err) {
         console.error("Kod doğrulama hatası:", err);
         return alert("Bağlantı hatası. Lütfen tekrar dene.");
     }
+};
 
-    // İsim hafızasını güncelle
+window.studentLogin = async () => {
+    const name = document.getElementById('student-name-input').value.trim();
+    if (!name) return alert("Lütfen ismini gir.");
+
     let studentList = JSON.parse(localStorage.getItem('studentHafizasi') || '[]');
     if (!studentList.includes(name)) {
         studentList.push(name);
@@ -226,13 +334,11 @@ window.studentLogin = async () => {
         localStorage.setItem('studentHafizasi', JSON.stringify(studentList));
     }
 
-    state.teacherCode = code;
     state.studentName = name;
     state.operation = document.getElementById('operation-select').value;
-    state.isIntegerMode = document.getElementById('integer-mode-check').checked;
+    state.totalQs = GRADE_CONFIG[state.grade].questionCount;
 
-    let title = OP_MAP[state.operation].label;
-    if (state.isIntegerMode) title += " (Tam Sayılar)";
+    let title = `${GRADE_CONFIG[state.grade].label} — ${OP_MAP[state.operation].label}`;
     document.getElementById('op-title').innerText = title;
 
     switchView('view-student');
@@ -252,40 +358,48 @@ window.changePage = (d) => { state.quiz.page += d; renderQuiz(); window.scrollTo
 function startQuiz() {
     state.quiz = { questions: [], answers: {}, page: 0, seconds: 0, timer: null };
     const seen = new Set();
-    const mode = state.isIntegerMode;
+    const gc = GRADE_CONFIG[state.grade];
     const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-    while (state.quiz.questions.length < TOTAL_QS) {
+    while (state.quiz.questions.length < state.totalQs) {
         let n1, n2, result;
         let currentOp = state.operation;
 
         if (state.operation === 'mixed_equations') {
-            const ops = ['addition', 'subtraction', 'multiplication', 'division'];
-            currentOp = ops[rand(0, 3)];
+            const ops = gc.operations.filter(o => o !== 'mixed_equations');
+            currentOp = ops[rand(0, ops.length - 1)];
         }
+
+        const cfg = gc[currentOp];
 
         switch (currentOp) {
             case 'addition':
-                n1 = mode ? rand(-50, 50) : rand(10, 99);
-                n2 = mode ? rand(-50, 50) : rand(10, 99);
+                n1 = rand(cfg.n1Min, cfg.n1Max);
+                n2 = rand(cfg.n2Min, cfg.n2Max);
                 result = n1 + n2;
                 break;
             case 'subtraction':
-                n1 = mode ? rand(-50, 50) : rand(10, 99);
-                n2 = mode ? rand(-50, 50) : rand(10, n1);
+                n1 = rand(cfg.n1Min, cfg.n1Max);
+                n2 = cfg.noNegResult ? rand(cfg.n2Min, Math.min(cfg.n2Max, n1)) : rand(cfg.n2Min, cfg.n2Max);
                 result = n1 - n2;
+                if (cfg.noNegResult && result < 0) continue;
                 break;
             case 'multiplication':
-                n1 = mode ? rand(-12, 12) : rand(2, 20);
-                n2 = mode ? rand(-12, 12) : rand(2, 20);
+                n1 = rand(cfg.n1Min, cfg.n1Max);
+                n2 = rand(cfg.n2Min, cfg.n2Max);
                 result = n1 * n2;
                 break;
-            case 'division':
-                n2 = mode ? (Math.random() > 0.5 ? rand(2, 12) : rand(-12, -2)) : rand(2, 15);
-                let q = mode ? rand(-12, 12) : rand(2, 20);
+            case 'division': {
+                const dc = gc.division;
+                n2 = rand(dc.divMin, dc.divMax);
+                if (dc.negDiv && Math.random() > 0.5) n2 = -n2;
+                let q = rand(dc.quotMin, dc.quotMax);
+                if (n2 === 0) n2 = 2;
+                if (q === 0) q = 1;
                 n1 = n2 * q;
                 result = q;
                 break;
+            }
         }
 
         const key = `${n1}${currentOp}${n2}`;
@@ -302,9 +416,10 @@ function startQuiz() {
                 if (unknownType === "n2") correctVal = n2;
             }
 
+            const spread = Math.max(5, Math.abs(Math.round(correctVal * 0.3)));
             const opts = new Set([correctVal]);
             while (opts.size < 4) {
-                let fake = correctVal + rand(-10, 10);
+                let fake = correctVal + rand(-spread, spread);
                 if (fake !== correctVal) opts.add(fake);
             }
 
@@ -399,7 +514,7 @@ function renderQuiz() {
 }
 
 function updateQuizUI() {
-    const max = TOTAL_QS / PAGE_SIZE;
+    const max = Math.ceil(state.totalQs / PAGE_SIZE);
     const prev = document.getElementById('btn-prev');
     const next = document.getElementById('btn-next');
     const finish = document.getElementById('btn-finish');
@@ -411,14 +526,14 @@ function updateQuizUI() {
     if (finish) finish.style.display = state.quiz.page === max - 1 ? 'block' : 'none';
     if (info) info.innerText = `${state.quiz.page + 1} / ${max}`;
     const count = Object.keys(state.quiz.answers).length;
-    if (prog) prog.style.width = (count / TOTAL_QS * 100) + "%";
+    if (prog) prog.style.width = (count / state.totalQs * 100) + "%";
 }
 
 // ================================================================
 // Test Bitirme — Sonuç Firebase'e Kaydedilir
 // ================================================================
 window.confirmFinish = async () => {
-    if (Object.keys(state.quiz.answers).length < TOTAL_QS && !confirm("Boş sorularınız var. Bitirilsin mi?")) return;
+    if (Object.keys(state.quiz.answers).length < state.totalQs && !confirm("Boş sorularınız var. Bitirilsin mi?")) return;
     clearInterval(state.quiz.timer);
 
     let c = 0, w = 0, mistakes = [];
@@ -443,14 +558,14 @@ window.confirmFinish = async () => {
         }
     });
 
-    const emptyCount = TOTAL_QS - (c + w);
+    const emptyCount = state.totalQs - (c + w);
     const timeTaken = document.getElementById('student-timer').innerText;
-    const pct = Math.round((c / TOTAL_QS) * 100);
+    const pct = Math.round((c / state.totalQs) * 100);
 
     const result = {
         studentName: state.studentName,
         operation: state.operation,
-        isIntegerMode: state.isIntegerMode,
+        grade: state.grade,
         date: new Date().toISOString(),
         correct: c,
         wrong: w,
@@ -506,7 +621,7 @@ function renderResultView(correct, wrong, empty, time, pct, allResults) {
                 <div class="result-score-fill" style="width:${pct}%; background:${barColor};"></div>
             </div>
             <div style="text-align:center; font-weight:700; color:${barColor}; margin-top:6px;">
-                %${pct} Başarı (${correct}/${TOTAL_QS})
+                %${pct} Başarı (${correct}/${state.totalQs})
             </div>
         </div>`;
 
@@ -573,10 +688,10 @@ async function loadTeacherHistory() {
             const op = OP_MAP[d.operation];
             const item = document.createElement('div');
             item.className = 'history-item';
-            const intBadge = d.isIntegerMode ? '<span class="badge badge-integer">Tam Sayı</span>' : '';
+            const gradeBadge = d.grade ? `<span class="badge badge-grade">${d.grade}. Sınıf</span>` : '';
             item.innerHTML = `
                 <div>
-                    <strong>👤 ${d.studentName}</strong> <span class="badge ${op.badge}">${op.label}</span> ${intBadge}<br>
+                    <strong>👤 ${d.studentName}</strong> ${gradeBadge} <span class="badge ${op.badge}">${op.label}</span><br>
                     <small>${new Date(d.date).toLocaleString('tr-TR')}</small>
                 </div>
                 <div style="text-align:right">
