@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Matematik Dehası</title>
+    <link rel="stylesheet" href="css/site.css" />
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ========== ANA EKRAN ========== -->
+    <section id="view-home" class="view-section active">
+        <div class="auth-card">
+            <h1>Matematik Dehası 🧠</h1>
+            <p>Öğretmen-Öğrenci Matematik Platformu</p>
+
+            <div class="role-grid">
+                <div class="role-card" onclick="switchView('view-teacher-register')">
+                    <div class="role-icon">📝</div>
+                    <h3>Yeni Öğretmen</h3>
+                    <p>Kayıt ol ve sınıf kodu oluştur</p>
+                </div>
+                <div class="role-card" onclick="switchView('view-teacher-login')">
+                    <div class="role-icon">👨‍🏫</div>
+                    <h3>Öğretmen Girişi</h3>
+                    <p>Sınıf kodunla giriş yap</p>
+                </div>
+                <div class="role-card" onclick="switchView('view-student-login')">
+                    <div class="role-icon">🎒</div>
+                    <h3>Öğrenci Girişi</h3>
+                    <p>Öğretmen kodunu gir ve teste başla</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== ÖĞRETMEN KAYIT ========== -->
+    <section id="view-teacher-register" class="view-section">
+        <div class="auth-card">
+            <h2>📝 Öğretmen Kaydı</h2>
+            <p>Bilgilerinizi girin, size özel bir sınıf kodu oluşturulacak.</p>
+
+            <div class="form-card">
+                <div class="form-section-label">🔒 Kurum Doğrulama</div>
+                <input type="password" id="reg-master" placeholder="Kurum Kayıt Şifresi">
+                <div class="form-section-label">👤 Kişisel Bilgiler</div>
+                <input type="text" id="reg-name" placeholder="Adınız Soyadınız" maxlength="50">
+                <input type="password" id="reg-pin" placeholder="Şifre (en az 4 karakter)">
+                <input type="password" id="reg-pin2" placeholder="Şifre Tekrar">
+                <button class="btn btn-primary" onclick="registerTeacher()">Kayıt Ol</button>
+                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== KAYIT BAŞARILI ========== -->
+    <section id="view-teacher-code" class="view-section">
+        <div class="auth-card">
+            <h2>✅ Kayıt Başarılı!</h2>
+            <p>Sınıf kodunuz:</p>
+            <div class="code-display" id="display-code">XXX-XXX</div>
+            <p class="code-hint">Bu kodu öğrencilerinize verin. Tahtaya yazabilir veya mesaj gönderebilirsiniz.</p>
+            <button class="btn btn-primary" onclick="switchView('view-home')" style="max-width:300px; margin:20px auto 0;">Ana Sayfaya Dön</button>
+        </div>
+    </section>
+
+    <!-- ========== ÖĞRETMEN GİRİŞ ========== -->
+    <section id="view-teacher-login" class="view-section">
+        <div class="auth-card">
+            <h2>👨‍🏫 Öğretmen Girişi</h2>
+
+            <div class="form-card">
+                <input type="text" id="login-code" placeholder="Sınıf Kodunuz (ör: K7M-3P9)" maxlength="7"
+                       style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
+                <input type="password" id="login-pin" placeholder="Şifreniz">
+                <button class="btn btn-primary" onclick="teacherLogin()">Giriş Yap</button>
+                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== ÖĞRETMEN PANELİ ========== -->
+    <section id="view-teacher-panel" class="view-section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+            <h2 id="teacher-panel-title">Öğretmen Paneli 👨‍🏫</h2>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <div class="code-badge" id="panel-code-badge">KOD: ---</div>
+                <button class="btn btn-danger" onclick="logout()" style="width:auto">Çıkış</button>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h4>🔐 Şifre Güncelleme</h4>
+            <div style="display:flex; gap:10px;">
+                <input type="password" id="new-pin-input" placeholder="Yeni Şifre">
+                <button class="btn btn-primary" id="save-pin-btn" onclick="updatePin()" style="width:auto">Kaydet</button>
+            </div>
+        </div>
+
+        <h3 style="margin-bottom:15px;">📊 Öğrenci Sonuçları</h3>
+        <div class="history-list" id="teacher-history">
+            <p>Yükleniyor...</p>
+        </div>
+    </section>
+
+    <!-- ========== ÖĞRENCİ GİRİŞ ========== -->
+    <section id="view-student-login" class="view-section">
+        <div class="auth-card">
+            <h2>🎒 Öğrenci Girişi</h2>
+
+            <div class="form-card">
+                <input type="text" id="student-code-input" placeholder="Öğretmen Kodunu Gir (ör: K7M-3P9)" maxlength="7"
+                       style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
+                <input type="text" id="student-name-input" list="recent-students-list" placeholder="İsmini Yaz">
+                <datalist id="recent-students-list"></datalist>
+
+                <select id="operation-select">
+                    <option value="addition">Toplama (+)</option>
+                    <option value="subtraction">Çıkarma (-)</option>
+                    <option value="multiplication">Çarpma (×)</option>
+                    <option value="division">Bölme (÷)</option>
+                    <option value="mixed_equations">Denklem Çözme (4 İşlem Karışık)</option>
+                </select>
+                <label class="checkbox-group">
+                    <input type="checkbox" id="integer-mode-check">
+                    Tam Sayılar (Negatifler Dahil)
+                </label>
+                <button class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
+                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== TEST EKRANI ========== -->
+    <section id="view-student" class="view-section">
+        <div class="stats-bar">
+            <div id="student-timer" style="font-weight:bold; color:var(--danger);">00:00</div>
+            <div class="progress-container"><div class="progress-bar" id="student-progress"></div></div>
+            <div id="student-page-info">1 / 4</div>
+        </div>
+        <div id="op-title" style="text-align:center; font-weight:bold; color:var(--primary); margin-bottom:10px;"></div>
+        <div class="questions-list" id="questions-list"></div>
+        <div style="display:flex; justify-content: space-between; margin-top:30px;">
+            <button class="btn btn-secondary" id="btn-prev" onclick="changePage(-1)" style="width:auto">Geri</button>
+            <button class="btn btn-success" id="btn-finish" onclick="confirmFinish()" style="display:none; width:auto">Testi Bitir</button>
+            <button class="btn btn-primary" id="btn-next" onclick="changePage(1)" style="width:auto">İleri</button>
+        </div>
+    </section>
+</div>
+
+<!-- MODAL -->
+<div id="modal-detail" class="modal">
+    <div class="modal-content">
+        <h2 id="modal-header-text" style="color:var(--primary); margin-top:0;">Sınav Detayı</h2>
+        <div id="modal-body"></div>
+        <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="closeModal()">Kapat</button>
+    </div>
+</div>
+
+<script type="module" src="js/site.js"></script>
+</body>
+</html>
