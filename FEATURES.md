@@ -13,9 +13,10 @@
 | 7. Sınıf | +, −, ×, ÷, denklem | Negatif (±100), bilinmeyen | 40 |
 | 8. Sınıf | +, −, ×, ÷, denklem | Genişletilmiş (±200) | 40 |
 
-- Öğretmen kaydında sınıf düzeyi seçilir
-- Her sınıf için ayrı kod oluşturulabilir
-- Öğrenci kodu girince sınıf otomatik algılanır, işlemler filtrelenir
+- Öğretmen kaydında birden fazla sınıf düzeyi seçilebilir (checkbox)
+- Tek kod ile tüm sınıflar yönetilir
+- Öğrenci kodu girince aktif sınıflardan birini seçer, işlemler filtrelenir
+- Öğretmen panelinden sınıflar aktif/pasif yapılabilir
 
 ## Öğretmen Modülü
 
@@ -34,12 +35,17 @@
 ### Yönetim
 - Kurum kayıt şifresi Firebase Console üzerinden değiştirilebilir
 - Sınıf kodu paylaşımı ile öğrenci ekleme
+- Sınıf düzeyleri dinamik olarak aktif/pasif yapılabilir
+- Sonuç geçmişi sınıf bazlı filtrelenebilir
 
 ## Öğrenci Modülü
 
 ### Giriş
-- Öğretmenin sınıf kodu + öğrenci adı ile giriş
-- Kod doğrulama (geçersiz kodda uyarı)
+- Öğretmenin sınıf kodu + öğrenci adı + kişisel PIN ile giriş
+- 2 aşamalı kod doğrulama: kod → sınıf seçimi → isim → PIN
+- İlk girişte PIN oluşturma, sonraki girişlerde PIN doğrulama
+- PIN Firestore'da `teachers/{code}/students/{name}` altında saklanır
+- KVKK onayı olmadan teste başlanamaz
 
 ### Quiz
 - **İşlem türleri:** Toplama, Çıkarma, Çarpma, Bölme
@@ -50,6 +56,47 @@
 - Anlık doğru/yanlış sayacı
 - Sonuç Firestore'a otomatik kaydedilir
 
+## Kopya Önleme ve Anomali Tespiti
+
+### Öğrenci PIN Sistemi
+- İlk girişte 4+ haneli kişisel PIN belirleme
+- PIN paylaşılsa bile cihaz izleme devreye girer
+- **PIN Sıfırlama:** Öğretmen panelinden öğrencinin PIN'i silinebilir; öğrenci sonraki girişte yeni PIN oluşturur
+
+### Cihaz Parmak İzi
+- Benzersiz cihaz kimliği (UUID) localStorage'da saklanır
+- Toplanan cihaz verileri:
+  - Tarayıcı bilgisi (User-Agent)
+  - İşletim sistemi (platform)
+  - CPU çekirdek sayısı (hardwareConcurrency)
+  - RAM miktarı (deviceMemory)
+  - Grafik işlemci (WebGL renderer)
+  - Ekran çözünürlüğü
+  - IP adresi (ipify API)
+  - Zaman dilimi
+  - Dokunmatik ekran desteği
+
+### Anomali Tespit Motoru
+| Anomali Türü | Tespit Yöntemi | Uyarı |
+|---|---|---|
+| Ortak Cihaz | Aynı UUID farklı öğrenci isimleri | ⚠️ Ortak Cihaz rozeti |
+| Ani Artış | Puan ortalamasından >%40 sıçrama (3+ sonuç gerekli) | 📈 Ani Artış rozeti |
+
+- Anomali rozetleri öğretmen panelinde otomatik gösterilir
+- Sınav detay modalında cihaz bilgisi ve anomali açıklamaları yer alır
+
+## KVKK Uyumluluğu
+
+### Aydınlatma Metni
+- 8 bölümlü KVKK bildirimi (veri sorumlusu, toplanan veriler, amaçlar, saklama, haklar)
+- Sorumluluk reddi (disclaimer) ve MIT Lisansı referansı
+- İlk ziyarette zorunlu onay modalı
+
+### Onay Kaydı
+- Onay `consents/{deviceId}` altında Firestore'a kaydedilir
+- Kaydedilen bilgiler: onay versiyonu, tarih, tam cihaz parmak izi, IP adresi
+- localStorage ile çift kontrol (`md_kvkk_v1`)
+
 ## Teknik Özellikler
 
 ### Dağıtım
@@ -59,9 +106,13 @@
 
 ### Güvenlik
 - Firebase Anonymous Auth (Firestore erişimi için)
-- Firestore güvenlik kuralları (okuma/yazma kısıtlamaları)
+- Firestore güvenlik kuralları (`settings`, `teachers`, `history`, `students`, `consents`)
 - API anahtarı HTTP referrer kısıtlaması desteği
 - Kurum kayıt şifresi ile yetkisiz öğretmen kaydı engelleme
+- Öğrenci PIN ile kimlik doğrulama
+- Cihaz parmak izi ile kopya tespiti
+- KVKK uyumlu veri toplama ve onay mekanizması
+- Sınav sonuçları değiştirilemez (Firestore kuralı: update/delete yasak)
 
 ### Tasarım
 - Tek sayfa uygulama (SPA) — sayfa yenilenmeden geçişler

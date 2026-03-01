@@ -243,11 +243,150 @@ input:focus, select:focus { border-color: var(--primary); }
 }
 .badge-mixed { background: #f39c12; }
 
+/* Grade Checkbox Grid (Öğretmen Kayıt) */
+.grade-checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+.grade-check-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.2s;
+    font-size: 0.9rem;
+    user-select: none;
+}
+.grade-check-item:hover { border-color: var(--primary); background: #f0f7ff; }
+.grade-check-item:has(input:checked) { border-color: var(--primary); background: #e8f0fe; font-weight: 600; }
+.grade-check-item input { width: auto; accent-color: var(--primary); }
+
+/* Grade Picker (Öğrenci Sınıf Seçimi) */
+.grade-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 12px 0;
+}
+.grade-picker-btn {
+    padding: 16px 10px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: #f8fbfe;
+    cursor: pointer;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+    transition: 0.2s;
+}
+.grade-picker-btn:hover { border-color: var(--primary); background: #e8f0fe; transform: translateY(-2px); }
+.grade-picker-btn.selected { border-color: var(--primary); background: var(--primary); color: white; }
+
+/* Grade Management (Öğretmen Panel) */
+.grade-manage-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.grade-toggle {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: 0.2s;
+    border: 2px solid transparent;
+}
+.grade-toggle.active { background: #8e44ad; color: white; border-color: #8e44ad; }
+.grade-toggle.inactive { background: #f0f0f0; color: #999; border-color: #e0e0e0; }
+.grade-toggle.inactive:hover { border-color: #8e44ad; color: #8e44ad; }
+.grade-toggle.active:hover { opacity: 0.85; }
+
+/* Display Grades (Kod Görüntüleme) */
+.display-grades-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 10px;
+}
+.display-grades-list .badge { font-size: 0.9rem; padding: 6px 12px; margin-left: 0; }
+
+/* History Grade Filter */
+.history-filter {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+.filter-btn {
+    padding: 6px 14px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.8rem;
+    transition: 0.2s;
+}
+.filter-btn.active { border-color: #8e44ad; background: #8e44ad; color: white; }
+
+/* KVKK Modal */
+.kvkk-content { max-width: 700px; }
+.kvkk-text {
+    max-height: 45vh;
+    overflow-y: auto;
+    text-align: left;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    margin: 15px 0;
+    border: 1px solid var(--border);
+}
+.kvkk-text h3 { color: var(--primary); font-size: 1rem; margin: 16px 0 6px; }
+.kvkk-text ul { padding-left: 20px; }
+.kvkk-text li { margin-bottom: 4px; }
+
+/* Anomaly Badges */
+.badge-warning { background: #e74c3c; }
+.badge-anomaly { background: #e67e22; animation: pulse-badge 2s infinite; }
+@keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* PIN Section */
+.student-pin-list { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.student-pin-row {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; background:#f8fbfe; border-radius:10px;
+    border:1px solid var(--border);
+}
+.student-pin-info { display:flex; flex-direction:column; gap:2px; }
+.student-pin-info small { color:#888; font-size:0.8rem; }
+.btn-sm { padding:6px 14px; font-size:0.8rem; border-radius:8px; }
+
+#student-pin-section
+    padding: 12px;
+    background: #fef9e7;
+    border-radius: 10px;
+    border: 2px solid #f0c040;
+}
+
 @media (max-width: 768px) {
     .role-grid { grid-template-columns: 1fr; }
     .login-grid { grid-template-columns: 1fr; }
     .questions-list { grid-template-columns: 1fr; }
     .code-display { font-size: 2rem; letter-spacing: 5px; }
+    .grade-checkbox-grid { grid-template-columns: repeat(2, 1fr); }
+    .grade-picker-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ================================================================

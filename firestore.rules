@@ -30,7 +30,7 @@ service cloud.firestore {
                     && request.resource.data.pin is string
                     && request.resource.data.pin.size() >= 4;
       allow update: if request.auth != null
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin']);
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin', 'grades']);
       allow delete: if false;
 
       // HISTORY — Öğrenci sınav sonuçları
@@ -45,6 +45,36 @@ service cloud.firestore {
                       && request.resource.data.studentName.size() > 0;
         allow update, delete: if false;
       }
+
+      // ============================================================
+      // STUDENTS — Öğrenci PIN kayıtları
+      // Authenticated kullanıcılar okuyabilir (PIN doğrulama)
+      // Authenticated kullanıcılar oluşturabilir (ilk giriş)
+      // Güncelleme/silme yasak (PIN değiştirilemez)
+      // ============================================================
+      match /students/{studentName} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.keys().hasAll(['pin', 'createdAt'])
+                      && request.resource.data.pin is string
+                      && request.resource.data.pin.size() >= 4;
+        allow delete: if request.auth != null;
+        allow update: if false;
+      }
+    }
+
+    // ============================================================
+    // CONSENTS — KVKK onay kayıtları
+    // Authenticated kullanıcılar oluşturabilir/güncelleyebilir
+    // Okuma: authenticated
+    // Silme yasak
+    // ============================================================
+    match /consents/{deviceId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.resource.data.keys().hasAll(['version', 'acceptedAt', 'deviceInfo'])
+                            && request.resource.data.version is string;
+      allow delete: if false;
     }
 
     // Diğer tüm yollar kapalı

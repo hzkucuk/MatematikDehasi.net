@@ -1,6 +1,6 @@
 ﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const fbApp = initializeApp(firebaseConfig);
@@ -9,6 +9,11 @@ const db = getFirestore(fbApp);
 
 // Anonim oturum (Firestore erişimi için)
 signInAnonymously(auth).catch(err => console.error("Auth hatası:", err));
+
+// KVKK onay kontrolü — auth hazır olunca
+onAuthStateChanged(auth, (user) => {
+    if (user) checkKvkkConsent();
+});
 
 // ================================================================
 // Öğretmen Kodu Üretici
@@ -34,11 +39,97 @@ function cleanCode(input) {
 }
 
 // ================================================================
+// Cihaz Parmak İzi ve KVKK
+// ================================================================
+function getDeviceId() {
+    let id = localStorage.getItem('md_device_id');
+    if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem('md_device_id', id);
+    }
+    return id;
+}
+
+async function collectDeviceInfo() {
+    const info = {
+        deviceId: getDeviceId(),
+        userAgent: navigator.userAgent,
+        platform: navigator.platform || 'N/A',
+        language: navigator.language || 'N/A',
+        cpuCores: navigator.hardwareConcurrency || 0,
+        ramGB: navigator.deviceMemory || 0,
+        screen: `${screen.width}x${screen.height}`,
+        colorDepth: screen.colorDepth,
+        pixelRatio: window.devicePixelRatio || 1,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        touchPoints: navigator.maxTouchPoints || 0,
+        cookieEnabled: navigator.cookieEnabled,
+        online: navigator.onLine
+    };
+
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+            const ext = gl.getExtension('WEBGL_debug_renderer_info');
+            if (ext) {
+                info.gpuVendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+                info.gpuRenderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+            }
+        }
+    } catch { /* GPU bilgisi alınamadı */ }
+
+    try {
+        const resp = await fetch('https://api.ipify.org?format=json');
+        const data = await resp.json();
+        info.ip = data.ip;
+    } catch {
+        info.ip = 'N/A';
+    }
+
+    return info;
+}
+
+function checkKvkkConsent() {
+    if (localStorage.getItem('md_kvkk_v1')) return;
+    const modal = document.getElementById('kvkk-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+window.acceptKvkk = async () => {
+    const cb = document.getElementById('kvkk-checkbox');
+    if (!cb || !cb.checked) return;
+
+    const btn = document.getElementById('kvkk-accept-btn');
+    btn.disabled = true;
+    btn.textContent = 'Kaydediliyor...';
+
+    try {
+        const deviceInfo = await collectDeviceInfo();
+        await setDoc(doc(db, 'consents', getDeviceId()), {
+            accepted: true,
+            consentVersion: '1.0',
+            timestamp: new Date().toISOString(),
+            deviceInfo: deviceInfo
+        });
+
+        localStorage.setItem('md_kvkk_v1', new Date().toISOString());
+        document.getElementById('kvkk-modal').style.display = 'none';
+    } catch (err) {
+        console.error('KVKK kayıt hatası:', err);
+        alert('Onay kaydedilemedi. Lütfen tekrar deneyin.');
+        btn.disabled = false;
+        btn.textContent = 'Kabul Ediyorum';
+    }
+};
+
+// ================================================================
 // Uygulama Durumu
 // ================================================================
 let state = {
     teacherCode: "",
     teacherName: "",
+    teacherGrades: [],
     studentName: "",
     operation: "addition",
     grade: 0,
@@ -146,6 +237,19 @@ const updateStudentListUI = () => {
 };
 updateStudentListUI();
 
+// Öğrenci isim değişince PIN alanını sıfırla
+const _nameInput = document.getElementById('student-name-input');
+if (_nameInput) {
+    _nameInput.addEventListener('input', () => {
+        const ps = document.getElementById('student-pin-section');
+        if (ps) ps.style.display = 'none';
+        const p1 = document.getElementById('student-pin');
+        if (p1) p1.value = '';
+        const p2 = document.getElementById('student-pin2');
+        if (p2) p2.value = '';
+    });
+}
+
 // ================================================================
 // Görünüm Yönetimi
 // ================================================================
@@ -162,13 +266,14 @@ window.switchView = switchView;
 window.registerTeacher = async () => {
     const masterPin = document.getElementById('reg-master').value;
     const name = document.getElementById('reg-name').value.trim();
-    const grade = parseInt(document.getElementById('reg-grade').value);
+    const gradeCheckboxes = document.querySelectorAll('#reg-grades input[type="checkbox"]:checked');
+    const grades = Array.from(gradeCheckboxes).map(cb => parseInt(cb.value)).sort((a, b) => a - b);
     const pin = document.getElementById('reg-pin').value;
     const pin2 = document.getElementById('reg-pin2').value;
 
     if (!masterPin) return alert("Kurum kayıt şifresini girin.");
     if (!name) return alert("Lütfen adınızı girin.");
-    if (!grade || grade < 1 || grade > 8) return alert("Lütfen sınıf düzeyi seçin (1-8).");
+    if (grades.length === 0) return alert("En az bir sınıf düzeyi seçin.");
     if (pin.length < 4) return alert("Şifre en az 4 karakter olmalı.");
     if (pin !== pin2) return alert("Şifreler eşleşmiyor.");
 
@@ -207,13 +312,14 @@ window.registerTeacher = async () => {
     try {
         await setDoc(doc(db, 'teachers', code), {
             name: name,
-            grade: grade,
+            grades: grades,
             pin: pin,
             createdAt: new Date().toISOString()
         });
 
         document.getElementById('display-code').textContent = formatCode(code);
-        document.getElementById('display-grade').textContent = GRADE_CONFIG[grade].label;
+        document.getElementById('display-grades').innerHTML =
+            grades.map(g => `<span class="badge badge-grade">${GRADE_CONFIG[g].label}</span>`).join('');
         switchView('view-teacher-code');
     } catch (err) {
         console.error("Kayıt hatası:", err);
@@ -243,14 +349,15 @@ window.teacherLogin = async () => {
 
         state.teacherCode = code;
         state.teacherName = data.name;
-        state.grade = data.grade || 1;
+        state.teacherGrades = (data.grades || [data.grade || 1]).sort((a, b) => a - b);
 
-        const gradeLabel = GRADE_CONFIG[state.grade]?.label || `${state.grade}. Sınıf`;
         document.getElementById('teacher-panel-title').textContent = `${data.name} - Öğretmen Paneli 👨‍🏫`;
-        document.getElementById('panel-code-badge').textContent = `${gradeLabel} | KOD: ${formatCode(code)}`;
+        document.getElementById('panel-code-badge').textContent = `KOD: ${formatCode(code)}`;
 
+        renderGradeManagement();
         switchView('view-teacher-panel');
         await loadTeacherHistory();
+        await loadStudentPinList();
     } catch (err) {
         console.error("Giriş hatası:", err);
         alert("Giriş sırasında hata oluştu: " + err.message);
@@ -282,7 +389,48 @@ window.updatePin = async () => {
 };
 
 // ================================================================
-// ÖĞRENCİ GİRİŞ — 2 Aşamalı: Kod Doğrula → Teste Başla
+// SINIF YÖNETİMİ (Öğretmen Paneli)
+// ================================================================
+function renderGradeManagement() {
+    const grid = document.getElementById('grade-manage-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (let g = 1; g <= 8; g++) {
+        const isActive = state.teacherGrades.includes(g);
+        const btn = document.createElement('button');
+        btn.className = `grade-toggle ${isActive ? 'active' : 'inactive'}`;
+        btn.textContent = `${g}. Sınıf`;
+        btn.onclick = () => toggleTeacherGrade(g);
+        grid.appendChild(btn);
+    }
+}
+
+window.toggleTeacherGrade = async (g) => {
+    const isActive = state.teacherGrades.includes(g);
+    if (isActive && state.teacherGrades.length <= 1) {
+        return alert("En az bir sınıf aktif olmalıdır.");
+    }
+
+    let newGrades;
+    if (isActive) {
+        newGrades = state.teacherGrades.filter(x => x !== g);
+    } else {
+        newGrades = [...state.teacherGrades, g].sort((a, b) => a - b);
+    }
+
+    try {
+        await updateDoc(doc(db, 'teachers', state.teacherCode), { grades: newGrades });
+        state.teacherGrades = newGrades;
+        renderGradeManagement();
+        renderHistoryFilter();
+    } catch (err) {
+        console.error("Sınıf güncelleme hatası:", err);
+        alert("Sınıf güncellenemedi: " + err.message);
+    }
+};
+
+// ================================================================
+// ÖĞRENCİ GİRİŞ — 2 Aşamalı: Kod Doğrula → Sınıf Seç → Teste Başla
 // ================================================================
 window.validateStudentCode = async () => {
     const rawCode = document.getElementById('student-code-input').value;
@@ -296,37 +444,126 @@ window.validateStudentCode = async () => {
         if (!snap.exists()) return alert("Bu öğretmen kodu bulunamadı. Kodunu kontrol et.");
 
         const data = snap.data();
-        const grade = data.grade || 1;
-        const gc = GRADE_CONFIG[grade];
+        const grades = (data.grades || [data.grade || 1]).sort((a, b) => a - b);
 
         state.teacherCode = code;
-        state.grade = grade;
+        state.teacherName = data.name;
+        state.teacherGrades = grades;
 
-        document.getElementById('grade-info-card').innerHTML =
-            `📚 <strong>${gc.label}</strong> — Öğretmen: ${data.name}`;
-
-        const select = document.getElementById('operation-select');
-        select.innerHTML = '';
-        gc.operations.forEach(op => {
-            const option = document.createElement('option');
-            option.value = op;
-            option.textContent = `${OP_MAP[op].label} (${OP_MAP[op].symbol})`;
-            select.appendChild(option);
-        });
-
-        document.getElementById('student-grade-info').style.display = 'block';
         document.getElementById('btn-validate-code').style.display = 'none';
         document.getElementById('student-code-input').readOnly = true;
+
+        if (grades.length === 1) {
+            selectStudentGrade(grades[0]);
+        } else {
+            const grid = document.getElementById('grade-picker-grid');
+            grid.innerHTML = '';
+            grades.forEach(g => {
+                const btn = document.createElement('button');
+                btn.className = 'grade-picker-btn';
+                btn.textContent = GRADE_CONFIG[g].label;
+                btn.onclick = () => selectStudentGrade(g);
+                grid.appendChild(btn);
+            });
+            document.getElementById('student-grade-picker').style.display = 'block';
+        }
     } catch (err) {
         console.error("Kod doğrulama hatası:", err);
         return alert("Bağlantı hatası. Lütfen tekrar dene.");
     }
 };
 
+function selectStudentGrade(g) {
+    state.grade = g;
+    const gc = GRADE_CONFIG[g];
+
+    document.getElementById('grade-info-card').innerHTML =
+        `📚 <strong>${gc.label}</strong> — Öğretmen: ${state.teacherName}`;
+
+    const select = document.getElementById('operation-select');
+    select.innerHTML = '';
+    gc.operations.forEach(op => {
+        const option = document.createElement('option');
+        option.value = op;
+        option.textContent = `${OP_MAP[op].label} (${OP_MAP[op].symbol})`;
+        select.appendChild(option);
+    });
+
+    document.querySelectorAll('.grade-picker-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.textContent === gc.label);
+    });
+
+    document.getElementById('student-grade-picker').style.display =
+        state.teacherGrades.length > 1 ? 'block' : 'none';
+    document.getElementById('student-grade-info').style.display = 'block';
+}
+window.selectStudentGrade = selectStudentGrade;
+
 window.studentLogin = async () => {
     const name = document.getElementById('student-name-input').value.trim();
-    if (!name) return alert("Lütfen ismini gir.");
+    if (!name) return alert("L\u00fctfen ismini gir.");
+    if (!state.grade) return alert("L\u00fctfen s\u0131n\u0131f\u0131n\u0131 se\u00e7.");
 
+    const normalizedName = name.toLowerCase().replace(/\s+/g, '_').replace(/\//g, '_');
+    const studentRef = doc(db, 'teachers', state.teacherCode, 'students', normalizedName);
+    const pinSection = document.getElementById('student-pin-section');
+    const pinInput = document.getElementById('student-pin');
+    const pinConfirmWrap = document.getElementById('student-pin-confirm-wrap');
+
+    // İlk tıklama: PIN alanını göster
+    if (pinSection.style.display === 'none') {
+        try {
+            const studentSnap = await getDoc(studentRef);
+            if (studentSnap.exists()) {
+                document.getElementById('pin-section-title').textContent = '\ud83d\udd11 PIN\'ini Gir';
+                pinConfirmWrap.style.display = 'none';
+                state._studentExists = true;
+            } else {
+                document.getElementById('pin-section-title').textContent = '\ud83d\udd11 Ki\u015fisel PIN Belirle (ilk giri\u015f)';
+                pinConfirmWrap.style.display = 'block';
+                state._studentExists = false;
+            }
+            pinSection.style.display = 'block';
+            pinInput.focus();
+            return;
+        } catch (err) {
+            console.error("\u00d6\u011frenci kontrol hatas\u0131:", err);
+            return alert("Ba\u011flant\u0131 hatas\u0131. Tekrar deneyin.");
+        }
+    }
+
+    // İkinci tıklama: PIN do\u011frula / olu\u015ftur
+    const pin = pinInput.value;
+    if (pin.length < 4) return alert("PIN en az 4 haneli olmal\u0131.");
+
+    if (state._studentExists) {
+        try {
+            const studentSnap = await getDoc(studentRef);
+            if (studentSnap.data().pin !== pin) {
+                return alert("PIN hatal\u0131! Bu isim sana ait de\u011filse kendi ismini kullan.");
+            }
+        } catch (err) {
+            console.error("PIN do\u011frulama hatas\u0131:", err);
+            return alert("Ba\u011flant\u0131 hatas\u0131.");
+        }
+    } else {
+        const pin2 = document.getElementById('student-pin2').value;
+        if (pin !== pin2) return alert("PIN'ler e\u015fle\u015fmiyor.");
+
+        try {
+            await setDoc(studentRef, {
+                pin: pin,
+                displayName: name,
+                deviceId: getDeviceId(),
+                createdAt: new Date().toISOString()
+            });
+        } catch (err) {
+            console.error("\u00d6\u011frenci kay\u0131t hatas\u0131:", err);
+            return alert("Kay\u0131t hatas\u0131: " + err.message);
+        }
+    }
+
+    // PIN do\u011fruland\u0131 \u2014 quiz ba\u015flat
     let studentList = JSON.parse(localStorage.getItem('studentHafizasi') || '[]');
     if (!studentList.includes(name)) {
         studentList.push(name);
@@ -338,7 +575,7 @@ window.studentLogin = async () => {
     state.operation = document.getElementById('operation-select').value;
     state.totalQs = GRADE_CONFIG[state.grade].questionCount;
 
-    let title = `${GRADE_CONFIG[state.grade].label} — ${OP_MAP[state.operation].label}`;
+    let title = `${GRADE_CONFIG[state.grade].label} \u2014 ${OP_MAP[state.operation].label}`;
     document.getElementById('op-title').innerText = title;
 
     switchView('view-student');
@@ -571,7 +808,8 @@ window.confirmFinish = async () => {
         wrong: w,
         empty: emptyCount,
         timeTaken,
-        mistakes
+        mistakes,
+        deviceId: getDeviceId()
     };
 
     try {
@@ -664,8 +902,11 @@ window.filterResults = (filter) => {
 };
 
 // ================================================================
-// Öğretmen Paneli — Geçmiş Yükleme
+// Öğretmen Paneli — Geçmiş Yükleme (Sınıf Filtreli)
 // ================================================================
+let cachedHistory = [];
+let historyFilterGrade = 'all';
+
 async function loadTeacherHistory() {
     const list = document.getElementById('teacher-history');
     list.innerHTML = "<p>Yükleniyor...</p>";
@@ -673,50 +914,212 @@ async function loadTeacherHistory() {
     try {
         const historyRef = collection(db, 'teachers', state.teacherCode, 'history');
         const snap = await getDocs(historyRef);
-        const docs = [];
-        snap.forEach(d => docs.push(d.data()));
-        docs.sort((a, b) => new Date(b.date) - new Date(a.date));
+        cachedHistory = [];
+        snap.forEach(d => cachedHistory.push(d.data()));
+        cachedHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        list.innerHTML = "";
-
-        if (docs.length === 0) {
-            list.innerHTML = "<p>Henüz öğrenci sonucu bulunmuyor. Öğrencilerinize kodunuzu verin!</p>";
-            return;
-        }
-
-        docs.forEach(d => {
-            const op = OP_MAP[d.operation];
-            const item = document.createElement('div');
-            item.className = 'history-item';
-            const gradeBadge = d.grade ? `<span class="badge badge-grade">${d.grade}. Sınıf</span>` : '';
-            item.innerHTML = `
-                <div>
-                    <strong>👤 ${d.studentName}</strong> ${gradeBadge} <span class="badge ${op.badge}">${op.label}</span><br>
-                    <small>${new Date(d.date).toLocaleString('tr-TR')}</small>
-                </div>
-                <div style="text-align:right">
-                    <span style="color:green; font-weight:bold;">✅ ${d.correct}</span> |
-                    <span style="color:red; font-weight:bold;">❌ ${d.wrong}</span> |
-                    <span style="color:gray;">⬜ ${d.empty}</span>
-                </div>`;
-            item.onclick = () => {
-                document.getElementById('modal-body').innerHTML = `
-                    <p><strong>Öğrenci:</strong> ${d.studentName}</p>
-                    <p><strong>Süre:</strong> ${d.timeTaken}</p>
-                    <p><strong>Sonuç:</strong> ${d.correct} Doğru, ${d.wrong} Yanlış, ${d.empty} Boş</p>
-                    <hr>
-                    <h4>Hatalı Sorular:</h4>
-                    ${d.mistakes && d.mistakes.length > 0 ? d.mistakes.map(m => `
-                        <div style="padding:10px; border-bottom:1px solid #eee;">
-                            <b>${m.q}</b> → Doğru: ${m.r}, Seçilen: <span style="color:red">${m.y}</span>
-                        </div>
-                    `).join('') : "<p>Hata yok! 🎉</p>"}`;
-                document.getElementById('modal-detail').style.display = 'flex';
-            };
-            list.appendChild(item);
-        });
+        historyFilterGrade = 'all';
+        renderHistoryFilter();
+        renderHistory();
     } catch (err) {
         list.innerHTML = "<p>Geçmiş yüklenirken hata oluştu.</p>";
         console.error(err);
     }
 }
+
+function renderHistoryFilter() {
+    const container = document.getElementById('history-grade-filter');
+    if (!container) return;
+
+    if (state.teacherGrades.length <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = '';
+    const allBtn = document.createElement('button');
+    allBtn.className = `filter-btn ${historyFilterGrade === 'all' ? 'active' : ''}`;
+    allBtn.textContent = 'Tümü';
+    allBtn.onclick = () => { historyFilterGrade = 'all'; renderHistoryFilter(); renderHistory(); };
+    container.appendChild(allBtn);
+
+    state.teacherGrades.forEach(g => {
+        const btn = document.createElement('button');
+        btn.className = `filter-btn ${historyFilterGrade === g ? 'active' : ''}`;
+        btn.textContent = `${g}. Sınıf`;
+        btn.onclick = () => { historyFilterGrade = g; renderHistoryFilter(); renderHistory(); };
+        container.appendChild(btn);
+    });
+}
+
+// ================================================================
+// Anomali Tespiti
+// ================================================================
+function detectAnomalies(docs) {
+    const result = { sharedDevices: {}, scoreAnomalies: {} };
+
+    // 1. Aynı cihaz, farklı öğrenciler
+    const deviceMap = {};
+    docs.forEach(d => {
+        if (!d.deviceId) return;
+        if (!deviceMap[d.deviceId]) deviceMap[d.deviceId] = new Set();
+        deviceMap[d.deviceId].add(d.studentName);
+    });
+
+    Object.values(deviceMap).forEach(names => {
+        if (names.size > 1) {
+            const nameArr = Array.from(names);
+            nameArr.forEach(n => {
+                result.sharedDevices[n] = nameArr.filter(x => x !== n);
+            });
+        }
+    });
+
+    // 2. Skor anomalisi (ortalamadan >40 puan sıçrama)
+    const studentScores = {};
+    const sorted = [...docs].sort((a, b) => new Date(a.date) - new Date(b.date));
+    sorted.forEach(d => {
+        const total = d.correct + d.wrong + (d.empty || 0);
+        if (total === 0) return;
+        const pct = Math.round((d.correct / total) * 100);
+        if (!studentScores[d.studentName]) studentScores[d.studentName] = [];
+        studentScores[d.studentName].push(pct);
+    });
+
+    Object.entries(studentScores).forEach(([name, scores]) => {
+        if (scores.length < 3) return;
+        const prev = scores.slice(0, -1);
+        const avg = Math.round(prev.reduce((s, v) => s + v, 0) / prev.length);
+        const latest = scores[scores.length - 1];
+        if (latest - avg > 40) {
+            result.scoreAnomalies[name] = { avg, latest, jump: latest - avg };
+        }
+    });
+
+    return result;
+}
+
+function renderHistory() {
+    const list = document.getElementById('teacher-history');
+    list.innerHTML = "";
+
+    const filtered = historyFilterGrade === 'all'
+        ? cachedHistory
+        : cachedHistory.filter(d => d.grade === historyFilterGrade);
+
+    if (filtered.length === 0) {
+        list.innerHTML = historyFilterGrade === 'all'
+            ? "<p>Hen\u00fcz \u00f6\u011frenci sonucu bulunmuyor. \u00d6\u011frencilerinize kodunuzu verin!</p>"
+            : "<p>Bu s\u0131n\u0131f i\u00e7in hen\u00fcz sonu\u00e7 bulunmuyor.</p>";
+        return;
+    }
+
+    const anomalies = detectAnomalies(cachedHistory);
+
+    filtered.forEach(d => {
+        const op = OP_MAP[d.operation];
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        const gradeBadge = d.grade ? `<span class="badge badge-grade">${d.grade}. S\u0131n\u0131f</span>` : '';
+
+        let anomalyBadges = '';
+        if (anomalies.sharedDevices[d.studentName]) {
+            anomalyBadges += `<span class="badge badge-warning" title="Ortak cihaz">\u26a0\ufe0f Ortak Cihaz</span>`;
+        }
+        if (anomalies.scoreAnomalies[d.studentName]) {
+            const a = anomalies.scoreAnomalies[d.studentName];
+            anomalyBadges += `<span class="badge badge-anomaly" title="Ort: %${a.avg} \u2192 Son: %${a.latest}">\ud83d\udcc8 +${a.jump}</span>`;
+        }
+
+        item.innerHTML = `
+            <div>
+                <strong>\ud83d\udc64 ${d.studentName}</strong> ${gradeBadge} <span class="badge ${op.badge}">${op.label}</span> ${anomalyBadges}<br>
+                <small>${new Date(d.date).toLocaleString('tr-TR')}</small>
+            </div>
+            <div style="text-align:right">
+                <span style="color:green; font-weight:bold;">\u2705 ${d.correct}</span> |
+                <span style="color:red; font-weight:bold;">\u274c ${d.wrong}</span> |
+                <span style="color:gray;">\u2b1c ${d.empty}</span>
+            </div>`;
+        item.onclick = () => {
+            let deviceAlert = '';
+            if (anomalies.sharedDevices[d.studentName]) {
+                const others = anomalies.sharedDevices[d.studentName].join(', ');
+                deviceAlert += `<p style="color:#e74c3c; font-weight:bold;">\u26a0\ufe0f Ortak Cihaz: ${others} ile ayn\u0131 cihaz\u0131 kullan\u0131yor</p>`;
+            }
+            if (anomalies.scoreAnomalies[d.studentName]) {
+                const a = anomalies.scoreAnomalies[d.studentName];
+                deviceAlert += `<p style="color:#e67e22; font-weight:bold;">\ud83d\udcc8 Performans anomalisi: Ortalama %${a.avg} \u2192 Son s\u0131nav %${a.latest} (+${a.jump})</p>`;
+            }
+            if (d.deviceId) {
+                deviceAlert += `<p style="color:#888; font-size:0.8rem;">\ud83d\udcf1 Cihaz: ${d.deviceId.substring(0, 8)}...</p>`;
+            }
+
+            document.getElementById('modal-body').innerHTML = `
+                ${deviceAlert}
+                <p><strong>\u00d6\u011frenci:</strong> ${d.studentName}</p>
+                <p><strong>S\u00fcre:</strong> ${d.timeTaken}</p>
+                <p><strong>Sonu\u00e7:</strong> ${d.correct} Do\u011fru, ${d.wrong} Yanl\u0131\u015f, ${d.empty} Bo\u015f</p>
+                <hr>
+                <h4>Hatal\u0131 Sorular:</h4>
+                ${d.mistakes && d.mistakes.length > 0 ? d.mistakes.map(m => `
+                    <div style="padding:10px; border-bottom:1px solid #eee;">
+                        <b>${m.q}</b> → Doğru: ${m.r}, Seçilen: <span style="color:red">${m.y}</span>
+                    </div>
+                `).join('') : "<p>Hata yok! 🎉</p>"}`;
+            document.getElementById('modal-detail').style.display = 'flex';
+        };
+        list.appendChild(item);
+    });
+}
+
+// ================================================================
+// Öğrenci PIN Yönetimi
+// ================================================================
+async function loadStudentPinList() {
+    const container = document.getElementById('student-pin-list');
+    if (!container) return;
+    container.innerHTML = '<p style="color:#aaa;">Yükleniyor...</p>';
+
+    try {
+        const studentsRef = collection(db, 'teachers', state.teacherCode, 'students');
+        const snap = await getDocs(studentsRef);
+
+        if (snap.empty) {
+            container.innerHTML = '<p style="color:#aaa;">Henüz kayıtlı öğrenci yok.</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        snap.forEach(d => {
+            const data = d.data();
+            const safeName = (data.displayName || d.id).replace(/'/g, "\\'");
+            const row = document.createElement('div');
+            row.className = 'student-pin-row';
+            row.innerHTML = `
+                <div class="student-pin-info">
+                    <strong>👤 ${data.displayName || d.id}</strong>
+                    <small>Kayıt: ${data.createdAt ? new Date(data.createdAt).toLocaleDateString('tr-TR') : '—'}</small>
+                </div>
+                <button class="btn btn-danger btn-sm" onclick="resetStudentPin('${d.id}', '${safeName}')">🔄 PIN Sıfırla</button>`;
+            container.appendChild(row);
+        });
+    } catch (err) {
+        console.error('Öğrenci listesi hatası:', err);
+        container.innerHTML = '<p style="color:#e74c3c;">Liste yüklenemedi.</p>';
+    }
+}
+
+window.resetStudentPin = async (studentId, displayName) => {
+    if (!confirm(`"${displayName}" adlı öğrencinin PIN'i silinecek.\nÖğrenci bir sonraki girişte yeni PIN belirleyecek.\n\nDevam edilsin mi?`)) return;
+
+    try {
+        const studentRef = doc(db, 'teachers', state.teacherCode, 'students', studentId);
+        await deleteDoc(studentRef);
+        alert(`✅ ${displayName} için PIN sıfırlandı.`);
+        await loadStudentPinList();
+    } catch (err) {
+        console.error('PIN sıfırlama hatası:', err);
+        alert('PIN sıfırlanamadı: ' + err.message);
+    }
+};

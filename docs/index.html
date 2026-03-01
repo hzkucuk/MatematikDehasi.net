@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Matematik Dehası</title>
+    <title>Matematik Dehasi</title>
     <link rel="stylesheet" href="css/site.css" />
 </head>
 <body>
@@ -47,18 +47,17 @@
                 <input type="password" id="reg-master" placeholder="Kurum Kayıt Şifresi">
                 <div class="form-section-label">👤 Kişisel Bilgiler</div>
                 <input type="text" id="reg-name" placeholder="Adınız Soyadınız" maxlength="50">
-                <div class="form-section-label">🏫 Sınıf Düzeyi</div>
-                <select id="reg-grade">
-                    <option value="">Sınıf Seçin...</option>
-                    <option value="1">1. Sınıf</option>
-                    <option value="2">2. Sınıf</option>
-                    <option value="3">3. Sınıf</option>
-                    <option value="4">4. Sınıf</option>
-                    <option value="5">5. Sınıf</option>
-                    <option value="6">6. Sınıf</option>
-                    <option value="7">7. Sınıf</option>
-                    <option value="8">8. Sınıf</option>
-                </select>
+                <div class="form-section-label">🏫 Sınıf Düzeyleri (birden fazla seçilebilir)</div>
+                <div class="grade-checkbox-grid" id="reg-grades">
+                    <label class="grade-check-item"><input type="checkbox" value="1"><span>1. Sınıf</span></label>
+                    <label class="grade-check-item"><input type="checkbox" value="2"><span>2. Sınıf</span></label>
+                    <label class="grade-check-item"><input type="checkbox" value="3"><span>3. Sınıf</span></label>
+                    <label class="grade-check-item"><input type="checkbox" value="4"><span>4. Sınıf</span></label>
+                    <label class="grade-check-item"><input type="checkbox" value="5"><span>5. Sınıf</span></label>
+                    <label class="grade-check-item"><input type="checkbox" value="6"><span>6. Sınıf</span></label>
+                    <label class="grade-check-item"><input type="checkbox" value="7"><span>7. Sınıf</span></label>
+                    <label class="grade-check-item"><input type="checkbox" value="8"><span>8. Sınıf</span></label>
+                </div>
                 <input type="password" id="reg-pin" placeholder="Şifre (en az 4 karakter)">
                 <input type="password" id="reg-pin2" placeholder="Şifre Tekrar">
                 <button class="btn btn-primary" onclick="registerTeacher()">Kayıt Ol</button>
@@ -71,10 +70,11 @@
     <section id="view-teacher-code" class="view-section">
         <div class="auth-card">
             <h2>✅ Kayıt Başarılı!</h2>
-            <p><strong id="display-grade"></strong> için sınıf kodunuz:</p>
+            <p>Öğretmen kodunuz:</p>
             <div class="code-display" id="display-code">XXX-XXX</div>
-            <p class="code-hint">Bu kodu öğrencilerinize verin. Tahtaya yazabilir veya mesaj gönderebilirsiniz.</p>
-            <p class="code-hint"><em>Birden fazla sınıfınız varsa her sınıf için ayrı kayıt yaparak farklı kodlar oluşturabilirsiniz.</em></p>
+            <div class="display-grades-list" id="display-grades"></div>
+            <p class="code-hint">Bu kodu tüm sınıflarınızdaki öğrencilere verin. Tahtaya yazabilir veya mesaj gönderebilirsiniz.</p>
+            <p class="code-hint"><em>Öğrenciler kodu girdikten sonra kendi sınıflarını seçecekler.</em></p>
             <button class="btn btn-primary" onclick="switchView('view-home')" style="max-width:300px; margin:20px auto 0;">Ana Sayfaya Dön</button>
         </div>
     </section>
@@ -105,6 +105,12 @@
         </div>
 
         <div class="settings-card">
+            <h4>🏫 Sınıf Yönetimi</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Aktif sınıflarınızı yönetin. Öğrenciler bu sınıfları görecektir.</p>
+            <div class="grade-manage-grid" id="grade-manage-grid"></div>
+        </div>
+
+        <div class="settings-card">
             <h4>🔐 Şifre Güncelleme</h4>
             <div style="display:flex; gap:10px;">
                 <input type="password" id="new-pin-input" placeholder="Yeni Şifre">
@@ -112,7 +118,16 @@
             </div>
         </div>
 
+        <div class="settings-card">
+            <h4>🔑 Öğrenci PIN Yönetimi</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">PIN'ini unutan öğrencinin PIN'ini sıfırlayabilirsiniz. Öğrenci bir sonraki girişte yeni PIN belirler.</p>
+            <div id="student-pin-list" class="student-pin-list">
+                <p style="color:#aaa;">Öğrenci listesi yükleniyor...</p>
+            </div>
+        </div>
+
         <h3 style="margin-bottom:15px;">📊 Öğrenci Sonuçları</h3>
+        <div class="history-filter" id="history-grade-filter"></div>
         <div class="history-list" id="teacher-history">
             <p>Yükleniyor...</p>
         </div>
@@ -128,10 +143,26 @@
                        style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
                 <button class="btn btn-secondary" id="btn-validate-code" onclick="validateStudentCode()">🔍 Kodu Doğrula</button>
 
+                <div id="student-grade-picker" style="display:none;">
+                    <div class="form-section-label">📚 Sınıfını Seç</div>
+                    <div class="grade-picker-grid" id="grade-picker-grid"></div>
+                </div>
+
                 <div id="student-grade-info" style="display:none;">
                     <div class="grade-info-card" id="grade-info-card"></div>
                     <input type="text" id="student-name-input" list="recent-students-list" placeholder="İsmini Yaz">
                     <datalist id="recent-students-list"></datalist>
+
+                    <div id="student-pin-section" style="display:none;">
+                        <div class="form-section-label" id="pin-section-title">🔑 Kişisel PIN</div>
+                        <input type="password" id="student-pin" placeholder="4 haneli PIN" maxlength="6" inputmode="numeric"
+                               style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+                        <div id="student-pin-confirm-wrap" style="display:none; margin-top:10px;">
+                            <input type="password" id="student-pin2" placeholder="PIN Tekrar" maxlength="6" inputmode="numeric"
+                                   style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+                        </div>
+                    </div>
+
                     <select id="operation-select"></select>
                     <button class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
                 </div>
@@ -157,17 +188,22 @@
         </div>
     </section>
 
+    <!-- ========== SONUÇ EKRANI ========== -->
     <section id="view-result" class="view-section">
         <div class="auth-card" style="max-width:700px;">
             <h2 id="result-title">📊 Sınav Sonucun</h2>
+
             <div class="result-summary" id="result-summary"></div>
+
             <div class="result-tabs">
                 <button class="result-tab active" onclick="filterResults('all')">Tümü</button>
                 <button class="result-tab" onclick="filterResults('wrong')">❌ Yanlışlar</button>
                 <button class="result-tab" onclick="filterResults('empty')">⬜ Boşlar</button>
                 <button class="result-tab" onclick="filterResults('correct')">✅ Doğrular</button>
             </div>
+
             <div id="result-questions"></div>
+
             <div style="margin-top:30px; display:flex; gap:10px;">
                 <button class="btn btn-primary" style="flex:1" onclick="location.reload()">🏠 Ana Sayfa</button>
             </div>
@@ -181,6 +217,62 @@
         <h2 id="modal-header-text" style="color:var(--primary); margin-top:0;">Sınav Detayı</h2>
         <div id="modal-body"></div>
         <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="closeModal()">Kapat</button>
+    </div>
+</div>
+
+<!-- KVKK ONAY MODALI -->
+<div id="kvkk-modal" class="modal" style="display:none;">
+    <div class="modal-content kvkk-content">
+        <h2 style="color:var(--primary); margin-top:0;">📜 KVKK Aydınlatma Metni ve Kullanım Koşulları</h2>
+        <div class="kvkk-text">
+            <h3>1. Uygulama Hakkında</h3>
+            <p>Matematik Dehası ("Uygulama"), ilkokul ve ortaokul öğrencilerine yönelik eğitim amaçlı bir matematik alıştırma platformudur. MIT Lisansı ile açık kaynak olarak sunulmaktadır.</p>
+
+            <h3>2. Veri Sorumlusu</h3>
+            <p>Uygulamayı kuran ve kullanan eğitim kurumu/öğretmen, 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında veri sorumlusudur. Uygulama geliştiricisi veri işleyen konumundadır.</p>
+
+            <h3>3. Toplanan Kişisel Veriler</h3>
+            <ul>
+                <li><strong>Kimlik Verileri:</strong> Ad-soyad, kişisel PIN</li>
+                <li><strong>Performans Verileri:</strong> Sınav sonuçları, doğru/yanlış/boş sayıları, çözüm süresi</li>
+                <li><strong>Cihaz Verileri:</strong> Tarayıcı bilgisi, işletim sistemi, ekran çözünürlüğü, CPU çekirdek sayısı, bellek miktarı, grafik işlemci bilgisi, zaman dilimi</li>
+                <li><strong>Bağlantı Verileri:</strong> IP adresi, erişim tarihi ve saati</li>
+                <li><strong>Tanımlayıcı:</strong> Benzersiz cihaz kimliği (UUID)</li>
+            </ul>
+
+            <h3>4. Verilerin İşlenme Amacı</h3>
+            <ul>
+                <li>Eğitim performansının takibi ve değerlendirilmesi</li>
+                <li>Öğrenci kimlik doğrulaması</li>
+                <li>Akademik dürüstlük denetimi (kopya tespiti)</li>
+                <li>Aynı cihazdan farklı kimliklerle giriş tespiti</li>
+            </ul>
+
+            <h3>5. Verilerin Saklanması</h3>
+            <p>Veriler Google Firebase (Cloud Firestore) altyapısında, AB/ABD bölgesindeki veri merkezlerinde saklanır.</p>
+
+            <h3>6. Sorumluluk Reddi (Disclaimer)</h3>
+            <p>Uygulama "OLDUĞU GİBİ" (AS-IS) sunulmaktadır. Geliştirici:</p>
+            <ul>
+                <li>Üçüncü taraf hizmetlerden (Firebase, Google Cloud) kaynaklanan güvenlik ihlallerinden sorumlu tutulamaz.</li>
+                <li>Uygulamanın kesintisiz veya hatasız çalışacağını garanti etmez.</li>
+                <li>Doğrudan veya dolaylı zararlardan sorumluluk kabul etmez.</li>
+            </ul>
+
+            <h3>7. Haklarınız</h3>
+            <p>KVKK m.11 gereğince; verilerinizin işlenip işlenmediğini öğrenme, düzeltilmesini veya silinmesini talep etme haklarına sahipsiniz.</p>
+
+            <h3>8. Lisans</h3>
+            <p>MIT Lisansı — <a href="https://github.com/hzkucuk/MatematikDehasi.net" target="_blank">Kaynak Kod</a></p>
+        </div>
+
+        <label class="checkbox-group" style="margin-top:15px;">
+            <input type="checkbox" id="kvkk-checkbox"
+                   onchange="document.getElementById('kvkk-accept-btn').disabled = !this.checked">
+            <span>Yukarıdaki koşulları okudum ve kabul ediyorum.</span>
+        </label>
+        <button class="btn btn-primary" id="kvkk-accept-btn" onclick="acceptKvkk()" disabled
+                style="margin-top:15px;">Kabul Ediyorum</button>
     </div>
 </div>
 
