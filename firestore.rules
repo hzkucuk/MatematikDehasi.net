@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // SETTINGS — Kurum kayıt şifresi
+    // Herkes okuyabilir (kayıt doğrulaması için)
+    // Sadece authenticated kullanıcılar yazabilir
+    // ============================================================
+    match /settings/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ============================================================
+    // TEACHERS — Öğretmen profilleri
+    // Herkes okuyabilir (öğrenci kod doğrulaması için)
+    // Sadece authenticated kullanıcılar oluşturabilir
+    // Sadece kendi dokümanını güncelleyebilir
+    // Silme yasak
+    // ============================================================
+    match /teachers/{teacherCode} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll(['name', 'pin', 'createdAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 50
+                    && request.resource.data.pin is string
+                    && request.resource.data.pin.size() >= 4;
+      allow update: if request.auth != null
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin']);
+      allow delete: if false;
+
+      // HISTORY — Öğrenci sınav sonuçları
+      // Herkes (authenticated) oluşturabilir (öğrenci sonuç kaydı)
+      // Herkes (authenticated) okuyabilir (öğretmen panel)
+      // Güncelleme/silme yasak (sonuçlar değiştirilemez)
+      match /history/{historyId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.keys().hasAll(['studentName', 'operation', 'date', 'correct', 'wrong', 'empty'])
+                      && request.resource.data.studentName is string
+                      && request.resource.data.studentName.size() > 0;
+        allow update, delete: if false;
+      }
+    }
+
+    // Diğer tüm yollar kapalı
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

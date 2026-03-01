@@ -1,19 +1,7 @@
 ﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-// ================================================================
-// Firebase Yapılandırması
-// ================================================================
-const firebaseConfig = {
-    apiKey: "AIzaSyDrHg2Pvklv9frtiKeztADKkOOkDpl8v-k",
-    authDomain: "matematikdehasi-e0da6.firebaseapp.com",
-    projectId: "matematikdehasi-e0da6",
-    storageBucket: "matematikdehasi-e0da6.firebasestorage.app",
-    messagingSenderId: "80229605673",
-    appId: "1:80229605673:web:27624b153e4d40e40c1738",
-    measurementId: "G-8JZ6GH38VZ"
-};
+import { firebaseConfig } from "./firebase-config.js";
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
