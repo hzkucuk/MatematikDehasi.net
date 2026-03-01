@@ -1,6 +1,30 @@
-MIT License
+MIT Lisansı
 
-Copyright (c) [year] [fullname]
+Telif Hakkı (c) 2025 hzkucuk
+
+Bu yazılımın ve ilgili dokümantasyon dosyalarının ("Yazılım") bir kopyasını
+edinen herkese, aşağıdaki koşullara tabi olarak, Yazılım üzerinde herhangi
+bir kısıtlama olmaksızın kullanma, kopyalama, değiştirme, birleştirme,
+yayımlama, dağıtma, alt lisanslama ve/veya satma hakları dahil ancak bunlarla
+sınırlı olmamak üzere işlem yapma izni ücretsiz olarak verilmiştir. Yazılımın
+sağlandığı kişilere de aynı haklar aşağıdaki koşullarla tanınır:
+
+Yukarıdaki telif hakkı bildirimi ve bu izin bildirimi, Yazılımın tüm
+kopyalarına veya önemli bölümlerine dahil edilmelidir.
+
+YAZILIM, TİCARİ ELVERİŞLİLİK, BELİRLİ BİR AMACA UYGUNLUK VE İHLAL
+ETMEME GARANTİLERİ DAHİL ANCAK BUNLARLA SINIRLI OLMAMAK ÜZERE, AÇIK VEYA
+ZIMNİ HİÇBİR GARANTİ OLMAKSIZIN "OLDUĞU GİBİ" SUNULMAKTADIR. YAZARLAR
+VEYA TELİF HAKKI SAHİPLERİ, YAZILIMDAN VEYA YAZILIMIN KULLANIMINDAN YA DA
+YAZILIMLA İLGİLİ DİĞER İŞLEMLERDEN KAYNAKLANAN HERHANGİ BİR TALEP,
+HASAR VEYA DİĞER YÜKÜMLÜLÜKLERDEN, İSTER SÖZLEŞME, İSTER HAKSIZ FİİL
+İSTERSE BAŞKA BİR ŞEKİLDE OLSUN, HİÇBİR DURUMDA SORUMLU TUTULAMAZ.
+
+---
+
+MIT License (Original)
+
+Copyright (c) 2025 hzkucuk
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
