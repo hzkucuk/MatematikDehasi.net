@@ -5,7 +5,30 @@ Format [Semantic Versioning](https://semver.org/lang/tr/) kurallarına uygundur.
 
 ---
 
-## [v1.0.0] — 2025-03-01 — İlk Sürüm
+## [v1.1.0] — 2025-03-01 — Sınıf Düzeyi Sistemi
+
+### Eklenen
+- MEB müfredatına uygun 1-8. sınıf düzeyi konfigürasyonu — `site.js`
+- Öğretmen kaydına sınıf düzeyi seçimi — `Index.cshtml`, `site.js`
+- Öğrenci girişinde 2 aşamalı akış: kod doğrula → sınıfa uygun işlemler — `site.js`, `Index.cshtml`
+- Sınıfa göre soru sayısı (20/30/40) ve sayı aralıkları otomatik ayarlanıyor — `site.js`
+- Sınıf bilgisi öğretmen panelinde ve sonuç geçmişinde görüntüleniyor — `site.js`
+- Sınıf bilgi kartı CSS stili (gradient) — `site.css`
+- Bir öğretmen birden fazla sınıf için ayrı kod oluşturabilir — `Index.cshtml`
+
+### Değişen
+- "Tam Sayılar" checkbox kaldırıldı → sınıf düzeyi (6+) otomatik belirliyor — `Index.cshtml`, `site.js`
+- Sabit 40 soru yerine sınıfa göre dinamik soru sayısı — `site.js`
+- Sahte seçenekler doğru cevaba oranla hesaplanıyor — `site.js`
+
+## [v1.0.1] — 2025-03-01 — Öğrenci Sonuç Ekranı
+
+### Eklenen
+- Sınav sonunda detaylı sonuç ekranı — `site.js`, `Index.cshtml`, `site.css`
+- Tümü/Yanlışlar/Boşlar/Doğrular filtreleme — `site.js`
+- Yüzde başarı çubuğu ve istatistik kartları — `site.css`
+
+
 
 ### Eklenen
 - Öğretmen kayıt sistemi (kurum şifresi doğrulaması ile) — `site.js`, `Index.cshtml`
