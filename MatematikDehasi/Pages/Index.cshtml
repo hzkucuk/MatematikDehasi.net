@@ -4,6 +4,11 @@
     ViewData["Title"] = "Matematik Dehası";
 }
 
+<div id="offline-banner" class="offline-banner" style="display:none;">
+    ⚠️ Gönderilmemiş sınav sonucu var. İnternet bağlantınız olduğunda otomatik gönderilecek.
+    <button class="btn-icon" onclick="retryPendingResults()" style="margin-left:8px;">🔄 Tekrar Dene</button>
+</div>
+
 <div class="container">
 
     <!-- ========== ANA EKRAN ========== -->
@@ -115,6 +120,22 @@
         </div>
 
         <div class="settings-card">
+            <h4>⏱️ Sınav Süresi Ayarı</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Öğrencilerin sınavı tamamlaması gereken süreyi belirleyin. Süre dolunca sınav otomatik teslim edilir.</p>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <select id="panel-time-limit" style="flex:1;">
+                    <option value="0">Sınırsız</option>
+                    <option value="600">10 Dakika</option>
+                    <option value="900">15 Dakika</option>
+                    <option value="1200">20 Dakika</option>
+                    <option value="1800">30 Dakika</option>
+                    <option value="3600">60 Dakika</option>
+                </select>
+                <button class="btn btn-primary" onclick="updateTimeLimit()" style="width:auto">Kaydet</button>
+            </div>
+        </div>
+
+        <div class="settings-card">
             <h4>🔑 Öğrenci PIN Yönetimi</h4>
             <p style="color:#888; font-size:0.85rem; margin-top:0;">PIN'ini unutan öğrencinin PIN'ini sıfırlayabilirsiniz. Öğrenci bir sonraki girişte yeni PIN belirler.</p>
             <div id="student-pin-list" class="student-pin-list">
@@ -122,7 +143,45 @@
             </div>
         </div>
 
-        <h3 style="margin-bottom:15px;">📊 Öğrenci Sonuçları</h3>
+        <div class="settings-card">
+            <h4>🔄 Kod Yenileme</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Güvenlik için sınıf kodunuzu yenileyin. Tüm geçmiş ve öğrenci verileri yeni koda taşınır.</p>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-warning" onclick="renewTeacherCode()" style="width:auto">🔄 Kodu Yenile</button>
+                <span id="renew-status" style="font-size:0.85rem; color:#888;"></span>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h4>📄 PDF Rapor</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Velilere göndermek için öğrenci performans raporu oluşturun.</p>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <select id="pdf-student-select" style="flex:1;"><option value="">Yükleniyor...</option></select>
+                <button class="btn btn-primary" onclick="generateStudentPDF()" style="width:auto">📄 PDF İndir</button>
+                <button class="btn btn-secondary" onclick="generateClassPDF()" style="width:auto">📄 Sınıf Raporu</button>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h4>📋 Öğrenci Yoklama Listesi</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Sınıfınızdaki öğrenci isimlerini girin. Sistem test çözmeyenleri otomatik gösterir.</p>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <input type="text" id="roster-name-input" placeholder="Öğrenci adı girin" style="flex:1;">
+                <button class="btn btn-primary" onclick="addToRoster()" style="width:auto">Ekle</button>
+            </div>
+            <div id="roster-list" class="roster-list"></div>
+            <div id="roster-missing" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="settings-card" id="stats-section">
+            <h4>📊 Sınıf İstatistikleri</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Genel ve sınıf bazlı performans analizi</p>
+            <div id="stats-dashboard">
+                <p style="color:#aaa;">İstatistikler yükleniyor...</p>
+            </div>
+        </div>
+
+        <h3 style="margin-bottom:15px;">📋 Öğrenci Sonuçları</h3>
         <div class="history-filter" id="history-grade-filter"></div>
         <div class="history-list" id="teacher-history">
             <p>Yükleniyor...</p>
@@ -200,8 +259,11 @@
 
             <div id="result-questions"></div>
 
-            <div style="margin-top:30px; display:flex; gap:10px;">
+            <div id="result-badges" class="result-badges"></div>
+
+            <div style="margin-top:30px; display:flex; gap:10px; flex-wrap:wrap;">
                 <button class="btn btn-primary" style="flex:1" onclick="location.reload()">🏠 Ana Sayfa</button>
+                <button class="btn btn-secondary" style="flex:1" onclick="downloadResultPDF()">📄 PDF İndir</button>
             </div>
         </div>
     </section>
@@ -245,12 +307,12 @@
             </ul>
 
             <h3>5. Verilerin Saklanması</h3>
-            <p>Veriler Google Firebase (Cloud Firestore) altyapısında, AB/ABD bölgesindeki veri merkezlerinde saklanır.</p>
+            <p>Veriler Cloudflare D1 (SQLite edge database) altyapısında, Cloudflare global ağında saklanır.</p>
 
             <h3>6. Sorumluluk Reddi (Disclaimer)</h3>
             <p>Uygulama "OLDUĞU GİBİ" (AS-IS) sunulmaktadır. Geliştirici:</p>
             <ul>
-                <li>Üçüncü taraf hizmetlerden (Firebase, Google Cloud) kaynaklanan güvenlik ihlallerinden sorumlu tutulamaz.</li>
+                <li>Üçüncü taraf hizmetlerden (Cloudflare) kaynaklanan güvenlik ihlallerinden sorumlu tutulamaz.</li>
                 <li>Uygulamanın kesintisiz veya hatasız çalışacağını garanti etmez.</li>
                 <li>Doğrudan veya dolaylı zararlardan sorumluluk kabul etmez.</li>
             </ul>

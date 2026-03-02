@@ -30,7 +30,7 @@ service cloud.firestore {
                     && request.resource.data.pin is string
                     && request.resource.data.pin.size() >= 4;
       allow update: if request.auth != null
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin', 'grades']);
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin', 'grades', 'timeLimit']);
       allow delete: if false;
 
       // HISTORY — Öğrenci sınav sonuçları

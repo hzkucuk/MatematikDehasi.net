@@ -32,11 +32,53 @@
 - Detaylı sınav görüntüleme: her sorunun doğru/yanlış durumu
 - Şifre güncelleme
 
+### İstatistik Paneli
+- Genel özet: toplam sınav, benzersiz öğrenci, genel ortalama, en zayıf işlem
+- İşlem bazlı başarı analizi (çubuk grafik ile görsel)
+- Sınıf bazlı performans: ortalama, min/max puan, öğrenci sayısı, en zayıf işlem
+- Tekrar deneme uyarısı (aynı öğrenci+işlem birden fazla çözmüşse)
+
+### Deneme Takibi
+- Her öğrencinin aynı işlem türünde kaç deneme yaptığı 🔄 rozeti ile gösterilir
+- Günlük deneme sayısı tooltip ile görüntülenir
+
 ### Yönetim
-- Kurum kayıt şifresi Firebase Console üzerinden değiştirilebilir
+- Kurum kayıt şifresi Cloudflare D1 settings tablosundan değiştirilebilir
 - Sınıf kodu paylaşımı ile öğrenci ekleme
 - Sınıf düzeyleri dinamik olarak aktif/pasif yapılabilir
 - Sonuç geçmişi sınıf bazlı filtrelenebilir
+
+### Yoklama Listesi
+- Öğretmen panelinden öğrenci isimleri ekleme/silme
+- localStorage tabanlı saklama (`md_roster_{öğretmenKodu}`)
+- Geçmiş verileriyle otomatik çapraz kontrol
+- ✅ Çözmüş / ❌ Çözmemiş durumu görsel olarak gösterilir
+- Çözmeyen öğrenciler için uyarı paneli
+- `loadTeacherHistory` sonrası otomatik güncelleme
+
+## Rozet / Başarı Sistemi
+
+### Tanımlı Rozetler (13 adet)
+| Rozet | Koşul |
+|-------|-------|
+| 🎯 İlk Adım | İlk sınavı tamamlama |
+| 🏅 Beşinci Sınav | 5 sınav tamamlama |
+| 🏆 On Sınav | 10 sınav tamamlama |
+| 💯 Mükemmel | %100 puan |
+| 🔥 Üçlü Seri | Arka arkaya 3 sınav %80+ |
+| 🔥🔥 Beşli Seri | Arka arkaya 5 sınav %80+ |
+| ⚡ Hız Ustası | 5 dakikadan kısa sürede tamamlama |
+| 📈 Gelişim | Son sınavda 20+ puanlık artış |
+| ➕ Toplama Ustası | Toplamada %90+ başarı |
+| ➖ Çıkarma Ustası | Çıkarmada %90+ başarı |
+| ✖️ Çarpma Ustası | Çarpmada %90+ başarı |
+| ➗ Bölme Ustası | Bölmede %90+ başarı |
+| 🌟 Dört İşlem Kahramanı | Tüm işlemlerde %90+ |
+
+### Gösterim
+- Öğrenci sonuç ekranında kazanılan rozetler animasyonlu kartlarla gösterilir
+- Öğretmen detay modalında öğrencinin tüm rozetleri listelenir
+- İstemci tarafında geçmiş verilerinden otomatik hesaplanır
 
 ## Öğrenci Modülü
 
@@ -44,17 +86,20 @@
 - Öğretmenin sınıf kodu + öğrenci adı + kişisel PIN ile giriş
 - 2 aşamalı kod doğrulama: kod → sınıf seçimi → isim → PIN
 - İlk girişte PIN oluşturma, sonraki girişlerde PIN doğrulama
-- PIN Firestore'da `teachers/{code}/students/{name}` altında saklanır
+- PIN D1 veritabanında `students` tablosunda saklanır
 - KVKK onayı olmadan teste başlanamaz
 
 ### Quiz
 - **İşlem türleri:** Toplama, Çıkarma, Çarpma, Bölme
 - **Zorluk seviyeleri:** Kolay (1-10), Orta (1-50), Zor (1-100)
 - **Soru sayısı:** 10 / 20 / 30
+- **Süre limiti:** Öğretmen tarafından belirlenir (Sınırsız / 10dk / 15dk / 20dk / 30dk / 60dk)
+- Süre dolunca otomatik teslim (geri sayım + renk uyarıları)
+- Öğrenci giriş ekranında süre bilgisi gösterilir
 - Sayfalı soru görünümü (sayfa başına 5 soru)
 - Otomatik süre takibi
 - Anlık doğru/yanlış sayacı
-- Sonuç Firestore'a otomatik kaydedilir
+- Sonuç D1 veritabanına otomatik kaydedilir
 
 ## Kopya Önleme ve Anomali Tespiti
 
@@ -93,9 +138,38 @@
 - İlk ziyarette zorunlu onay modalı
 
 ### Onay Kaydı
-- Onay `consents/{deviceId}` altında Firestore'a kaydedilir
+- Onay D1 veritabanında `consents` tablosuna kaydedilir
 - Kaydedilen bilgiler: onay versiyonu, tarih, tam cihaz parmak izi, IP adresi
 - localStorage ile çift kontrol (`md_kvkk_v1`)
+
+## Kod Yenileme
+
+- Ogretmen panelinden sinif kodu yenilenebilir
+- Yeni benzersiz kod uretilir (6 karakter)
+- Tum gecmis sonuclari yeni koda tasir
+- Tum ogrenci PIN verileri yeni koda tasir
+- Yoklama listesi localStorage da tasinir
+- Eski kod devre disi kalir
+- previousCode ve renewedAt alanlari kaydedilir
+
+## Cevrimdisi Yedekleme
+
+- Sinav sonuclari API’ye yazilamazsa localStorage a yedeklenir
+- md_pending_results anahtarinda JSON olarak saklanir
+- Sayfa yuklenince otomatik gonderim denemesi (3sn gecikme)
+- Offline banner ile kullaniciya bildirim
+- Manuel tekrar deneme butonu
+- Basarili gonderimde otomatik temizleme
+
+## PDF Rapor Olusturma
+
+- jsPDF 2.5.2 CDN ile istemci tarafinda PDF uretimi
+- 3 rapor turu:
+  - Ogrenci Performans Raporu: islem bazli basari, son sinavlar
+  - Sinif Raporu: tum ogrencilerin ozet ve detaylari
+  - Sinav Sonuc Raporu: ogrenci sonuc ekranindan her soru detayi
+- Turkcesiz (ASCII) font uyumlulugu
+- Otomatik sayfa gecisi (A4)
 
 ## Teknik Özellikler
 
@@ -105,14 +179,14 @@
 - **Doğrudan açma:** `docs/index.html` tarayıcıda çalışır
 
 ### Güvenlik
-- Firebase Anonymous Auth (Firestore erişimi için)
-- Firestore güvenlik kuralları (`settings`, `teachers`, `history`, `students`, `consents`)
-- API anahtarı HTTP referrer kısıtlaması desteği
+- Cloudflare Workers REST API ile veri erişimi
+- D1 veritabanı şeması ile veri bütünlüğü (teachers, students, history, consents, settings)
+- CORS politikası ile erişim kontrolü
 - Kurum kayıt şifresi ile yetkisiz öğretmen kaydı engelleme
 - Öğrenci PIN ile kimlik doğrulama
 - Cihaz parmak izi ile kopya tespiti
 - KVKK uyumlu veri toplama ve onay mekanizması
-- Sınav sonuçları değiştirilemez (Firestore kuralı: update/delete yasak)
+- Sınav sonuçları değiştirilemez (D1 şeması: history tablosunda update/delete yok)
 
 ### Tasarım
 - Tek sayfa uygulama (SPA) — sayfa yenilenmeden geçişler

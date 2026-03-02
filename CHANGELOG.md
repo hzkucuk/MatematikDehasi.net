@@ -5,6 +5,94 @@ Format [Semantic Versioning](https://semver.org/lang/tr/) kurallarına uygundur.
 
 ---
 
+## [v2.0.0] --- 2025-07-15 --- Cloudflare D1 Migrasyonu (Firebase Kaldırıldı)
+
+### Değişen (BREAKING)
+- Backend tamamen Firebase Firestore'dan Cloudflare D1'e (SQLite edge database) taşındı
+- Firebase SDK (firebase-app, firebase-auth, firebase-firestore) kaldırıldı
+- Tüm veri işlemleri Cloudflare Workers REST API üzerinden yapılıyor
+- `firebase-config.js` artık kullanılmıyor (silindi)
+
+### Eklenen
+- Cloudflare Workers REST API (14 endpoint) — `cf-worker/src/index.js`
+- `api()` helper fonksiyonu ile tüm REST çağrıları
+- D1 SQL şeması: 5 tablo (teachers, students, history, consents, settings) + 4 indeks
+- Sunucu tarafında toplu kod yenileme (`/renew` endpoint)
+- Geçmiş sorgularında sayfalama ve filtreleme (limit, offset, grade, since)
+
+### Kaldırılan
+- Firebase SDK importları ve `type="module"` script etiketi
+- `firebase-config.js` dosyası
+- `firestore.rules` bağımlılığı
+- Kayıt formundaki süre limiti seçeneği (artık sadece öğretmen panelinden)
+
+### Güncellenen
+- KVKK aydınlatma metni: "Google Firebase" → "Cloudflare D1"
+- Çevrimdışı yedekleme: localStorage + REST API retry
+- `loadTeacherHistory`: D1 snake_case → JS camelCase alan eşlemesi
+
+### Etkilenen Dosyalar
+site.js, Index.cshtml, _Layout.cshtml, docs/index.html, docs/js/site.js, cf-worker/*, FEATURES.md, CHANGELOG.md
+
+---
+
+## [v1.5.0] --- 2025-07-14 --- Kod Yenileme, Cevrimdisi Yedekleme ve PDF Rapor
+
+### Eklenen
+- Ogretmen paneline kod yenileme ozelligi eklendi
+- Cevrimdisi yedekleme mekanizmasi eklendi
+- PDF rapor olusturma eklendi (ogrenci + sinif + sonuc)
+- jsPDF 2.5.2 CDN entegrasyonu
+- Offline banner ve kod yenileme buton stilleri
+
+### Etkilenen Dosyalar
+site.js, Index.cshtml, _Layout.cshtml, site.css, docs/*
+
+---
+
+## [v1.4.0] — 2025-07-14 — Yoklama Listesi ve Rozet Sistemi
+
+### Eklenen
+- Öğretmen paneline sınıf yoklama listesi eklendi — `Index.cshtml`, `site.js`, `site.css`
+  - Öğrenci ismi ekleme/silme (localStorage tabanlı, öğretmen kodu bazlı)
+  - Kimlerin test çözdüğünü otomatik takip (✅ çözmüş / ❌ çözmemiş)
+  - Çözmeyen öğrenciler uyarı paneli
+  - `loadTeacherHistory` sonrası otomatik güncelleme
+- 13 rozet/başarı tanımı eklendi — `site.js`
+  - 🎯 İlk Adım, 🏅 5 Sınav, 🏆 10 Sınav, 💯 Mükemmel, 🔥 3/5'li Seri
+  - ⚡ Hız Ustası, 📈 Gelişim, ➕➖✖️➗ İşlem Ustaları, 🌟 Dört İşlem Kahramanı
+- Öğrenci sonuç ekranında kazanılan rozetler gösterimi — `Index.cshtml`, `site.js`
+- Öğretmen detay modalında öğrenci rozetleri — `site.js`
+- Rozet ve yoklama stilleri (animasyonlu kartlar, durum renkleri) — `site.css`
+
+### Etkilenen Dosyalar
+`site.js`, `Index.cshtml`, `site.css`, `docs/index.html`, `docs/js/site.js`, `docs/css/site.css`
+
+---
+
+## [v1.3.0] — 2025-07-14 — İstatistik Paneli, Süre Limiti ve Deneme Takibi
+
+### Eklenen
+- Öğretmen paneline sınıf istatistik paneli eklendi — `Index.cshtml`, `site.js`
+  - Genel özet: toplam sınav, öğrenci sayısı, ortalama başarı, en zayıf işlem
+  - İşlem bazlı başarı oranları (çubuk grafik)
+  - Sınıf bazlı performans: ortalama, min/max, öğrenci sayısı, en zayıf işlem
+  - Tekrar deneme uyarısı
+- Öğretmen tarafından belirlenen sınav süre limiti (10/15/20/30/60dk) — `Index.cshtml`, `site.js`
+- Öğretmen kaydında varsayılan süre limiti seçimi — `Index.cshtml`, `site.js`
+- Öğretmen panelinde süre ayarı değiştirme kartı — `Index.cshtml`, `site.js`
+- Süre dolunca otomatik teslim mekanizması — `site.js`
+- Geri sayım zamanlayıcı (kalan süre, renk uyarıları) — `site.js`, `site.css`
+- Deneme sayısı gösterimi: her öğrenci+işlem çifti için toplam/günlük deneme — `site.js`
+- 🔄 deneme sayısı rozeti öğretmen panelinde — `site.js`
+- Sonuç kaydına `timeLimit` alanı eklendi — `site.js`
+- İstatistik, süre ve deneme stilleri — `site.css`
+
+### Etkilenen Dosyalar
+`site.js`, `Index.cshtml`, `site.css`, `docs/index.html`, `docs/js/site.js`, `docs/css/site.css`
+
+---
+
 ## [v1.2.1] — 2025-07-14 — Öğrenci PIN Sıfırlama
 
 ### Eklenen

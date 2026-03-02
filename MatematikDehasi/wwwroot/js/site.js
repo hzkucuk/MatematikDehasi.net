@@ -1,19 +1,21 @@
-﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
+﻿// ================================================================
+// Cloudflare D1 REST API
+// ================================================================
+const API_BASE = 'https://matematik-api.matematikdehasi.workers.dev/api';
 
-const fbApp = initializeApp(firebaseConfig);
-const auth = getAuth(fbApp);
-const db = getFirestore(fbApp);
+async function api(path, method = 'GET', body = null) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(`${API_BASE}${path}`, opts);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || `API hatası: ${res.status}`);
+    }
+    return res.json();
+}
 
-// Anonim oturum (Firestore erişimi için)
-signInAnonymously(auth).catch(err => console.error("Auth hatası:", err));
-
-// KVKK onay kontrolü — auth hazır olunca
-onAuthStateChanged(auth, (user) => {
-    if (user) checkKvkkConsent();
-});
+// KVKK onay kontrolü — sayfa yüklenince
+checkKvkkConsent();
 
 // ================================================================
 // Öğretmen Kodu Üretici
@@ -106,10 +108,10 @@ window.acceptKvkk = async () => {
 
     try {
         const deviceInfo = await collectDeviceInfo();
-        await setDoc(doc(db, 'consents', getDeviceId()), {
-            accepted: true,
-            consentVersion: '1.0',
-            timestamp: new Date().toISOString(),
+        await api('/consents', 'POST', {
+            deviceId: getDeviceId(),
+            version: '1.0',
+            acceptedAt: new Date().toISOString(),
             deviceInfo: deviceInfo
         });
 
@@ -277,22 +279,12 @@ window.registerTeacher = async () => {
     if (pin.length < 4) return alert("Şifre en az 4 karakter olmalı.");
     if (pin !== pin2) return alert("Şifreler eşleşmiyor.");
 
-    // Kurum şifresini Firebase'den doğrula
+    // Kurum şifresini doğrula
     try {
-        const settingsRef = doc(db, 'settings', 'master');
-        const settingsSnap = await getDoc(settingsRef);
-
-        if (!settingsSnap.exists()) {
-            // İlk kurulum: master şifre henüz yok, varsayılanı oluştur
-            await setDoc(settingsRef, { registrationPin: 'ogretmen2025' });
-            if (masterPin !== 'ogretmen2025') {
-                return alert("Kurum kayıt şifresi hatalı.");
-            }
-        } else {
-            const storedPin = settingsSnap.data().registrationPin;
-            if (masterPin !== storedPin) {
-                return alert("Kurum kayıt şifresi hatalı.");
-            }
+        const settings = await api('/settings/master');
+        const storedPin = settings.value || 'ogretmen2025';
+        if (masterPin !== storedPin) {
+            return alert("Kurum kayıt şifresi hatalı.");
         }
     } catch (err) {
         console.error("Şifre doğrulama hatası:", err);
@@ -304,17 +296,17 @@ window.registerTeacher = async () => {
     let exists = true;
     while (exists) {
         code = generateCode();
-        const docRef = doc(db, 'teachers', code);
-        const snap = await getDoc(docRef);
-        exists = snap.exists();
+        const check = await api(`/teachers/${code}/exists`);
+        exists = check.exists;
     }
 
     try {
-        await setDoc(doc(db, 'teachers', code), {
+        await api('/teachers', 'POST', {
+            code: code,
             name: name,
-            grades: grades,
             pin: pin,
-            createdAt: new Date().toISOString()
+            grades: grades,
+            timeLimit: 0
         });
 
         document.getElementById('display-code').textContent = formatCode(code);
@@ -339,20 +331,21 @@ window.teacherLogin = async () => {
     if (!pin) return alert("Şifre girin.");
 
     try {
-        const docRef = doc(db, 'teachers', code);
-        const snap = await getDoc(docRef);
+        let data;
+        try { data = await api(`/teachers/${code}`); } catch { return alert("Bu kodla kayıtlı öğretmen bulunamadı."); }
 
-        if (!snap.exists()) return alert("Bu kodla kayıtlı öğretmen bulunamadı.");
-
-        const data = snap.data();
         if (data.pin !== pin) return alert("Hatalı şifre!");
 
         state.teacherCode = code;
         state.teacherName = data.name;
-        state.teacherGrades = (data.grades || [data.grade || 1]).sort((a, b) => a - b);
+        state.teacherGrades = (data.grades || [1]).sort((a, b) => a - b);
+        state.teacherTimeLimit = data.time_limit || data.timeLimit || 0;
 
         document.getElementById('teacher-panel-title').textContent = `${data.name} - Öğretmen Paneli 👨‍🏫`;
         document.getElementById('panel-code-badge').textContent = `KOD: ${formatCode(code)}`;
+
+        const tlSelect = document.getElementById('panel-time-limit');
+        if (tlSelect) tlSelect.value = String(state.teacherTimeLimit);
 
         renderGradeManagement();
         switchView('view-teacher-panel');
@@ -376,7 +369,7 @@ window.updatePin = async () => {
     saveBtn.innerText = "Kaydediliyor...";
 
     try {
-        await updateDoc(doc(db, 'teachers', state.teacherCode), { pin: newVal });
+        await api(`/teachers/${state.teacherCode}`, 'PUT', { pin: newVal });
         alert("Şifre başarıyla güncellendi!");
         document.getElementById('new-pin-input').value = "";
     } catch (err) {
@@ -385,6 +378,23 @@ window.updatePin = async () => {
     } finally {
         saveBtn.disabled = false;
         saveBtn.innerText = "Kaydet";
+    }
+};
+
+// ================================================================
+// ÖĞRETMEN SÜRE LİMİTİ GÜNCELLEME
+// ================================================================
+window.updateTimeLimit = async () => {
+    const newLimit = parseInt(document.getElementById('panel-time-limit').value) || 0;
+
+    try {
+        await api(`/teachers/${state.teacherCode}`, 'PUT', { timeLimit: newLimit });
+        state.teacherTimeLimit = newLimit;
+        const label = newLimit > 0 ? `${newLimit / 60} dakika` : 'Sınırsız';
+        alert(`✅ Sınav süresi güncellendi: ${label}`);
+    } catch (err) {
+        console.error("Süre güncelleme hatası:", err);
+        alert("Süre güncellenemedi: " + err.message);
     }
 };
 
@@ -419,7 +429,7 @@ window.toggleTeacherGrade = async (g) => {
     }
 
     try {
-        await updateDoc(doc(db, 'teachers', state.teacherCode), { grades: newGrades });
+        await api(`/teachers/${state.teacherCode}`, 'PUT', { grades: newGrades });
         state.teacherGrades = newGrades;
         renderGradeManagement();
         renderHistoryFilter();
@@ -439,16 +449,15 @@ window.validateStudentCode = async () => {
     if (code.length !== 6) return alert("Geçersiz öğretmen kodu. 6 karakterli kodu girin.");
 
     try {
-        const docRef = doc(db, 'teachers', code);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) return alert("Bu öğretmen kodu bulunamadı. Kodunu kontrol et.");
+        let data;
+        try { data = await api(`/teachers/${code}`); } catch { return alert("Bu öğretmen kodu bulunamadı. Kodunu kontrol et."); }
 
-        const data = snap.data();
-        const grades = (data.grades || [data.grade || 1]).sort((a, b) => a - b);
+        const grades = (data.grades || [1]).sort((a, b) => a - b);
 
         state.teacherCode = code;
         state.teacherName = data.name;
         state.teacherGrades = grades;
+        state.teacherTimeLimit = data.time_limit || data.timeLimit || 0;
 
         document.getElementById('btn-validate-code').style.display = 'none';
         document.getElementById('student-code-input').readOnly = true;
@@ -478,7 +487,8 @@ function selectStudentGrade(g) {
     const gc = GRADE_CONFIG[g];
 
     document.getElementById('grade-info-card').innerHTML =
-        `📚 <strong>${gc.label}</strong> — Öğretmen: ${state.teacherName}`;
+        `📚 <strong>${gc.label}</strong> — Öğretmen: ${state.teacherName}` +
+        (state.teacherTimeLimit > 0 ? ` — ⏱️ ${state.teacherTimeLimit / 60}dk` : ' — ⏱️ Sınırsız');
 
     const select = document.getElementById('operation-select');
     select.innerHTML = '';
@@ -505,7 +515,6 @@ window.studentLogin = async () => {
     if (!state.grade) return alert("L\u00fctfen s\u0131n\u0131f\u0131n\u0131 se\u00e7.");
 
     const normalizedName = name.toLowerCase().replace(/\s+/g, '_').replace(/\//g, '_');
-    const studentRef = doc(db, 'teachers', state.teacherCode, 'students', normalizedName);
     const pinSection = document.getElementById('student-pin-section');
     const pinInput = document.getElementById('student-pin');
     const pinConfirmWrap = document.getElementById('student-pin-confirm-wrap');
@@ -513,8 +522,8 @@ window.studentLogin = async () => {
     // İlk tıklama: PIN alanını göster
     if (pinSection.style.display === 'none') {
         try {
-            const studentSnap = await getDoc(studentRef);
-            if (studentSnap.exists()) {
+            const studentData = await api(`/teachers/${state.teacherCode}/students/${encodeURIComponent(normalizedName)}`);
+            if (studentData.exists) {
                 document.getElementById('pin-section-title').textContent = '\ud83d\udd11 PIN\'ini Gir';
                 pinConfirmWrap.style.display = 'none';
                 state._studentExists = true;
@@ -538,8 +547,8 @@ window.studentLogin = async () => {
 
     if (state._studentExists) {
         try {
-            const studentSnap = await getDoc(studentRef);
-            if (studentSnap.data().pin !== pin) {
+            const studentData = await api(`/teachers/${state.teacherCode}/students/${encodeURIComponent(normalizedName)}`);
+            if (studentData.pin !== pin) {
                 return alert("PIN hatal\u0131! Bu isim sana ait de\u011filse kendi ismini kullan.");
             }
         } catch (err) {
@@ -551,11 +560,11 @@ window.studentLogin = async () => {
         if (pin !== pin2) return alert("PIN'ler e\u015fle\u015fmiyor.");
 
         try {
-            await setDoc(studentRef, {
+            await api(`/teachers/${state.teacherCode}/students`, 'POST', {
+                studentName: normalizedName,
                 pin: pin,
                 displayName: name,
-                deviceId: getDeviceId(),
-                createdAt: new Date().toISOString()
+                deviceId: getDeviceId()
             });
         } catch (err) {
             console.error("\u00d6\u011frenci kay\u0131t hatas\u0131:", err);
@@ -574,8 +583,10 @@ window.studentLogin = async () => {
     state.studentName = name;
     state.operation = document.getElementById('operation-select').value;
     state.totalQs = GRADE_CONFIG[state.grade].questionCount;
+    state.timeLimit = state.teacherTimeLimit || 0;
 
-    let title = `${GRADE_CONFIG[state.grade].label} \u2014 ${OP_MAP[state.operation].label}`;
+    let title = `${GRADE_CONFIG[state.grade].label} — ${OP_MAP[state.operation].label}`;
+    if (state.timeLimit > 0) title += ` (${state.timeLimit / 60}dk)`;
     document.getElementById('op-title').innerText = title;
 
     switchView('view-student');
@@ -672,10 +683,27 @@ function startQuiz() {
 
     state.quiz.timer = setInterval(() => {
         state.quiz.seconds++;
-        const m = String(Math.floor(state.quiz.seconds / 60)).padStart(2, '0');
-        const s = String(state.quiz.seconds % 60).padStart(2, '0');
         const timerEl = document.getElementById('student-timer');
-        if (timerEl) timerEl.innerText = `${m}:${s}`;
+        if (!timerEl) return;
+
+        if (state.timeLimit > 0) {
+            const remaining = state.timeLimit - state.quiz.seconds;
+            if (remaining <= 0) {
+                clearInterval(state.quiz.timer);
+                timerEl.innerText = '00:00';
+                alert('⏰ Süre doldu! Sınavınız otomatik teslim ediliyor.');
+                confirmFinish();
+                return;
+            }
+            const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+            const s = String(remaining % 60).padStart(2, '0');
+            timerEl.innerText = `${m}:${s}`;
+            timerEl.className = remaining <= 60 ? 'timer-danger' : remaining <= 180 ? 'timer-warning' : '';
+        } else {
+            const m = String(Math.floor(state.quiz.seconds / 60)).padStart(2, '0');
+            const s = String(state.quiz.seconds % 60).padStart(2, '0');
+            timerEl.innerText = `${m}:${s}`;
+        }
     }, 1000);
     renderQuiz();
 }
@@ -767,7 +795,7 @@ function updateQuizUI() {
 }
 
 // ================================================================
-// Test Bitirme — Sonuç Firebase'e Kaydedilir
+// Test Bitirme — Sonuç Kaydedilir
 // ================================================================
 window.confirmFinish = async () => {
     if (Object.keys(state.quiz.answers).length < state.totalQs && !confirm("Boş sorularınız var. Bitirilsin mi?")) return;
@@ -808,15 +836,16 @@ window.confirmFinish = async () => {
         wrong: w,
         empty: emptyCount,
         timeTaken,
+        timeLimit: state.timeLimit || 0,
         mistakes,
         deviceId: getDeviceId()
     };
 
     try {
-        const historyRef = collection(db, 'teachers', state.teacherCode, 'history');
-        await addDoc(historyRef, result);
+        await api(`/teachers/${state.teacherCode}/history`, 'POST', result);
     } catch (err) {
-        console.error("Sonuç kaydedilemedi:", err);
+        console.error("Sonuç kaydedilemedi, çevrimdışı yedekleniyor:", err);
+        savePendingResult(result, state.teacherCode);
     }
 
     renderResultView(c, w, emptyCount, timeTaken, pct, allResults);
@@ -864,6 +893,7 @@ function renderResultView(correct, wrong, empty, time, pct, allResults) {
         </div>`;
 
     filterResults('all');
+    renderBadgesInResult();
     switchView('view-result');
 }
 
@@ -912,15 +942,23 @@ async function loadTeacherHistory() {
     list.innerHTML = "<p>Yükleniyor...</p>";
 
     try {
-        const historyRef = collection(db, 'teachers', state.teacherCode, 'history');
-        const snap = await getDocs(historyRef);
-        cachedHistory = [];
-        snap.forEach(d => cachedHistory.push(d.data()));
+        const resp = await api(`/teachers/${state.teacherCode}/history?limit=500`);
+        cachedHistory = (resp.results || []).map(r => ({
+            ...r,
+            studentName: r.student_name || r.studentName,
+            timeTaken: r.time_taken || r.timeTaken,
+            timeLimit: r.time_limit || r.timeLimit || 0,
+            date: r.created_at || r.date,
+            deviceId: r.device_id || r.deviceId
+        }));
         cachedHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         historyFilterGrade = 'all';
         renderHistoryFilter();
         renderHistory();
+        renderStatistics();
+        renderRoster();
+        updatePdfStudentList();
     } catch (err) {
         list.innerHTML = "<p>Geçmiş yüklenirken hata oluştu.</p>";
         console.error(err);
@@ -1016,11 +1054,32 @@ function renderHistory() {
 
     const anomalies = detectAnomalies(cachedHistory);
 
+    // Deneme sayısı hesapla (öğrenci + işlem bazlı)
+    const attemptCounts = {};
+    cachedHistory.forEach(d => {
+        const key = `${d.studentName}||${d.operation}`;
+        attemptCounts[key] = (attemptCounts[key] || 0) + 1;
+    });
+
+    // Günlük deneme sayısı
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dailyCounts = {};
+    cachedHistory.forEach(d => {
+        if (d.date && d.date.slice(0, 10) === todayStr) {
+            const key = `${d.studentName}||${d.operation}`;
+            dailyCounts[key] = (dailyCounts[key] || 0) + 1;
+        }
+    });
+
     filtered.forEach(d => {
         const op = OP_MAP[d.operation];
         const item = document.createElement('div');
         item.className = 'history-item';
-        const gradeBadge = d.grade ? `<span class="badge badge-grade">${d.grade}. S\u0131n\u0131f</span>` : '';
+        const gradeBadge = d.grade ? `<span class="badge badge-grade">${d.grade}. Sınıf</span>` : '';
+        const attemptKey = `${d.studentName}||${d.operation}`;
+        const attemptNum = attemptCounts[attemptKey] || 1;
+        const dailyNum = dailyCounts[attemptKey] || 0;
+        const attemptBadge = attemptNum > 1 ? `<span class="badge badge-attempt" title="Toplam ${attemptNum} deneme, bugün ${dailyNum}">🔄 ${attemptNum}x</span>` : '';
 
         let anomalyBadges = '';
         if (anomalies.sharedDevices[d.studentName]) {
@@ -1033,13 +1092,13 @@ function renderHistory() {
 
         item.innerHTML = `
             <div>
-                <strong>\ud83d\udc64 ${d.studentName}</strong> ${gradeBadge} <span class="badge ${op.badge}">${op.label}</span> ${anomalyBadges}<br>
-                <small>${new Date(d.date).toLocaleString('tr-TR')}</small>
+                <strong>👤 ${d.studentName}</strong> ${gradeBadge} <span class="badge ${op.badge}">${op.label}</span> ${attemptBadge} ${anomalyBadges}<br>
+                <small>${new Date(d.date).toLocaleString('tr-TR')}${d.timeLimit ? ` ⏱️${d.timeLimit/60}dk` : ''}</small>
             </div>
             <div style="text-align:right">
-                <span style="color:green; font-weight:bold;">\u2705 ${d.correct}</span> |
-                <span style="color:red; font-weight:bold;">\u274c ${d.wrong}</span> |
-                <span style="color:gray;">\u2b1c ${d.empty}</span>
+                <span style="color:green; font-weight:bold;">✅ ${d.correct}</span> |
+                <span style="color:red; font-weight:bold;">❌ ${d.wrong}</span> |
+                <span style="color:gray;">⬜ ${d.empty}</span>
             </div>`;
         item.onclick = () => {
             let deviceAlert = '';
@@ -1057,11 +1116,12 @@ function renderHistory() {
 
             document.getElementById('modal-body').innerHTML = `
                 ${deviceAlert}
-                <p><strong>\u00d6\u011frenci:</strong> ${d.studentName}</p>
-                <p><strong>S\u00fcre:</strong> ${d.timeTaken}</p>
-                <p><strong>Sonu\u00e7:</strong> ${d.correct} Do\u011fru, ${d.wrong} Yanl\u0131\u015f, ${d.empty} Bo\u015f</p>
+                <p><strong>Öğrenci:</strong> ${d.studentName}</p>
+                <p><strong>Süre:</strong> ${d.timeTaken}</p>
+                <p><strong>Sonuç:</strong> ${d.correct} Doğru, ${d.wrong} Yanlış, ${d.empty} Boş</p>
+                ${renderBadgesInTeacherPanel(d.studentName)}
                 <hr>
-                <h4>Hatal\u0131 Sorular:</h4>
+                <h4>Hatalı Sorular:</h4>
                 ${d.mistakes && d.mistakes.length > 0 ? d.mistakes.map(m => `
                     <div style="padding:10px; border-bottom:1px solid #eee;">
                         <b>${m.q}</b> → Doğru: ${m.r}, Seçilen: <span style="color:red">${m.y}</span>
@@ -1074,6 +1134,144 @@ function renderHistory() {
 }
 
 // ================================================================
+// İstatistik Paneli
+// ================================================================
+function renderStatistics() {
+    const container = document.getElementById('stats-dashboard');
+    if (!container) return;
+
+    if (cachedHistory.length === 0) {
+        container.innerHTML = '<p style="color:#aaa;">Henüz istatistik için yeterli veri yok.</p>';
+        return;
+    }
+
+    const totalExams = cachedHistory.length;
+    const uniqueStudents = new Set(cachedHistory.map(d => d.studentName)).size;
+    const avgScore = Math.round(cachedHistory.reduce((sum, d) => {
+        const total = d.correct + d.wrong + (d.empty || 0);
+        return sum + (total > 0 ? (d.correct / total) * 100 : 0);
+    }, 0) / totalExams);
+
+    // İşlem bazlı hata analizi
+    const opStats = {};
+    cachedHistory.forEach(d => {
+        if (!d.operation) return;
+        if (!opStats[d.operation]) opStats[d.operation] = { correct: 0, wrong: 0, empty: 0, count: 0 };
+        opStats[d.operation].correct += d.correct;
+        opStats[d.operation].wrong += d.wrong;
+        opStats[d.operation].empty += (d.empty || 0);
+        opStats[d.operation].count++;
+    });
+
+    let weakestOp = null, highestErrorRate = 0;
+    Object.entries(opStats).forEach(([op, s]) => {
+        const total = s.correct + s.wrong + s.empty;
+        const rate = total > 0 ? (s.wrong / total) * 100 : 0;
+        if (rate > highestErrorRate) { highestErrorRate = rate; weakestOp = op; }
+    });
+
+    // Deneme sayısı analizi
+    const attemptMap = {};
+    cachedHistory.forEach(d => {
+        const key = `${d.studentName}||${d.operation}`;
+        attemptMap[key] = (attemptMap[key] || 0) + 1;
+    });
+    const multiAttemptStudents = Object.entries(attemptMap).filter(([, c]) => c > 1).length;
+
+    // Genel özet kartları
+    let html = `
+        <div class="stats-overview">
+            <div class="stat-card sc-blue"><div class="stat-number">${totalExams}</div><div class="stat-desc">Toplam Sınav</div></div>
+            <div class="stat-card sc-green"><div class="stat-number">${uniqueStudents}</div><div class="stat-desc">Öğrenci</div></div>
+            <div class="stat-card ${avgScore >= 70 ? 'sc-green' : avgScore >= 50 ? 'sc-yellow' : 'sc-red'}"><div class="stat-number">%${avgScore}</div><div class="stat-desc">Genel Ortalama</div></div>
+            <div class="stat-card sc-red"><div class="stat-number">${weakestOp ? (OP_MAP[weakestOp]?.label || weakestOp) : '—'}</div><div class="stat-desc">En Zayıf İşlem</div></div>
+        </div>`;
+
+    // İşlem bazlı detay
+    const opKeys = Object.keys(opStats);
+    if (opKeys.length > 0) {
+        html += '<div class="stats-op-grid">';
+        opKeys.forEach(op => {
+            const s = opStats[op];
+            const total = s.correct + s.wrong + s.empty;
+            const pct = total > 0 ? Math.round((s.correct / total) * 100) : 0;
+            const barColor = pct >= 70 ? '#27ae60' : pct >= 50 ? '#f39c12' : '#e74c3c';
+            const label = OP_MAP[op]?.label || op;
+            html += `
+                <div class="stats-op-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong>${label}</strong><span style="color:${barColor}; font-weight:bold;">%${pct}</span>
+                    </div>
+                    <div class="stats-bar-bg"><div class="stats-bar-fill" style="width:${pct}%; background:${barColor};"></div></div>
+                    <div style="font-size:0.75rem; color:#888; margin-top:4px;">${s.count} sınav · ✅${s.correct} ❌${s.wrong} ⬜${s.empty}</div>
+                </div>`;
+        });
+        html += '</div>';
+    }
+
+    // Sınıf bazlı performans
+    const gradeStats = {};
+    cachedHistory.forEach(d => {
+        const g = d.grade || 0;
+        if (!g) return;
+        if (!gradeStats[g]) gradeStats[g] = { students: new Set(), scores: [], exams: 0, opErrors: {} };
+        gradeStats[g].exams++;
+        gradeStats[g].students.add(d.studentName);
+        const total = d.correct + d.wrong + (d.empty || 0);
+        if (total > 0) gradeStats[g].scores.push(Math.round((d.correct / total) * 100));
+        if (d.operation) {
+            if (!gradeStats[g].opErrors[d.operation]) gradeStats[g].opErrors[d.operation] = { wrong: 0, total: 0 };
+            gradeStats[g].opErrors[d.operation].wrong += d.wrong;
+            gradeStats[g].opErrors[d.operation].total += total;
+        }
+    });
+
+    const grades = Object.keys(gradeStats).sort((a, b) => a - b);
+    if (grades.length > 0) {
+        html += '<h5 style="margin:18px 0 10px; color:var(--primary);">📚 Sınıf Bazlı Performans</h5>';
+        html += '<div class="grade-stats-list">';
+        grades.forEach(g => {
+            const gs = gradeStats[g];
+            const avg = gs.scores.length > 0 ? Math.round(gs.scores.reduce((a, b) => a + b, 0) / gs.scores.length) : 0;
+            const min = gs.scores.length > 0 ? Math.min(...gs.scores) : 0;
+            const max = gs.scores.length > 0 ? Math.max(...gs.scores) : 0;
+            const barColor = avg >= 70 ? '#27ae60' : avg >= 50 ? '#f39c12' : '#e74c3c';
+
+            let gradeWeakest = '—';
+            let gradeHighErr = 0;
+            Object.entries(gs.opErrors).forEach(([op, data]) => {
+                const rate = data.total > 0 ? (data.wrong / data.total) * 100 : 0;
+                if (rate > gradeHighErr) { gradeHighErr = rate; gradeWeakest = OP_MAP[op]?.label || op; }
+            });
+
+            html += `
+                <div class="grade-stat-card">
+                    <div class="grade-stat-header">
+                        <strong>${GRADE_CONFIG[g]?.label || g + '. Sınıf'}</strong>
+                        <span style="color:${barColor}; font-weight:bold;">%${avg}</span>
+                    </div>
+                    <div class="stats-bar-bg"><div class="stats-bar-fill" style="width:${avg}%; background:${barColor};"></div></div>
+                    <div class="grade-stat-details">
+                        <span>👥 ${gs.students.size}</span>
+                        <span>📝 ${gs.exams}</span>
+                        <span>📉 %${min}</span>
+                        <span>📈 %${max}</span>
+                        <span>⚠️ ${gradeWeakest}</span>
+                    </div>
+                </div>`;
+        });
+        html += '</div>';
+    }
+
+    // Tekrar deneme uyarısı
+    if (multiAttemptStudents > 0) {
+        html += `<p style="margin-top:12px; color:#e67e22; font-size:0.85rem;">🔄 ${multiAttemptStudents} öğrenci-işlem çifti birden fazla deneme yapmış.</p>`;
+    }
+
+    container.innerHTML = html;
+}
+
+// ================================================================
 // Öğrenci PIN Yönetimi
 // ================================================================
 async function loadStudentPinList() {
@@ -1082,26 +1280,26 @@ async function loadStudentPinList() {
     container.innerHTML = '<p style="color:#aaa;">Yükleniyor...</p>';
 
     try {
-        const studentsRef = collection(db, 'teachers', state.teacherCode, 'students');
-        const snap = await getDocs(studentsRef);
+        const resp = await api(`/teachers/${state.teacherCode}/students`);
+        const students = resp.results || [];
 
-        if (snap.empty) {
+        if (students.length === 0) {
             container.innerHTML = '<p style="color:#aaa;">Henüz kayıtlı öğrenci yok.</p>';
             return;
         }
 
         container.innerHTML = '';
-        snap.forEach(d => {
-            const data = d.data();
-            const safeName = (data.displayName || d.id).replace(/'/g, "\\'");
+        students.forEach(d => {
+            const displayName = d.student_name || d.studentName;
+            const safeName = displayName.replace(/'/g, "\\'");
             const row = document.createElement('div');
             row.className = 'student-pin-row';
             row.innerHTML = `
                 <div class="student-pin-info">
-                    <strong>👤 ${data.displayName || d.id}</strong>
-                    <small>Kayıt: ${data.createdAt ? new Date(data.createdAt).toLocaleDateString('tr-TR') : '—'}</small>
+                    <strong>👤 ${displayName}</strong>
+                    <small>Kayıt: ${d.created_at ? new Date(d.created_at).toLocaleDateString('tr-TR') : '—'}</small>
                 </div>
-                <button class="btn btn-danger btn-sm" onclick="resetStudentPin('${d.id}', '${safeName}')">🔄 PIN Sıfırla</button>`;
+                <button class="btn btn-danger btn-sm" onclick="resetStudentPin('${encodeURIComponent(displayName)}', '${safeName}')">🔄 PIN Sıfırla</button>`;
             container.appendChild(row);
         });
     } catch (err) {
@@ -1114,8 +1312,7 @@ window.resetStudentPin = async (studentId, displayName) => {
     if (!confirm(`"${displayName}" adlı öğrencinin PIN'i silinecek.\nÖğrenci bir sonraki girişte yeni PIN belirleyecek.\n\nDevam edilsin mi?`)) return;
 
     try {
-        const studentRef = doc(db, 'teachers', state.teacherCode, 'students', studentId);
-        await deleteDoc(studentRef);
+        await api(`/teachers/${state.teacherCode}/students/${studentId}`, 'DELETE');
         alert(`✅ ${displayName} için PIN sıfırlandı.`);
         await loadStudentPinList();
     } catch (err) {
@@ -1123,3 +1320,581 @@ window.resetStudentPin = async (studentId, displayName) => {
         alert('PIN sıfırlanamadı: ' + err.message);
     }
 };
+
+// ================================================================
+// Öğrenci Yoklama Listesi (Sınıf Listesi)
+// ================================================================
+function getRoster() {
+    const key = `md_roster_${state.teacherCode}`;
+    return JSON.parse(localStorage.getItem(key) || '[]');
+}
+
+function saveRoster(list) {
+    const key = `md_roster_${state.teacherCode}`;
+    localStorage.setItem(key, JSON.stringify(list));
+}
+
+window.addToRoster = () => {
+    const input = document.getElementById('roster-name-input');
+    const name = input.value.trim();
+    if (!name) return alert("Öğrenci adı girin.");
+
+    const roster = getRoster();
+    if (roster.some(n => n.toLowerCase() === name.toLowerCase())) {
+        return alert("Bu öğrenci zaten listede.");
+    }
+    roster.push(name);
+    roster.sort((a, b) => a.localeCompare(b, 'tr'));
+    saveRoster(roster);
+    input.value = '';
+    renderRoster();
+};
+
+window.removeFromRoster = (name) => {
+    const roster = getRoster().filter(n => n !== name);
+    saveRoster(roster);
+    renderRoster();
+};
+
+function renderRoster() {
+    const container = document.getElementById('roster-list');
+    const missingContainer = document.getElementById('roster-missing');
+    if (!container) return;
+
+    const roster = getRoster();
+
+    if (roster.length === 0) {
+        container.innerHTML = '<p style="color:#aaa; font-size:0.85rem;">Henüz öğrenci eklenmedi.</p>';
+        if (missingContainer) missingContainer.innerHTML = '';
+        return;
+    }
+
+    // Kimler test çözmüş?
+    const solvedStudents = new Set(cachedHistory.map(d => d.studentName.toLowerCase()));
+
+    container.innerHTML = '';
+    roster.forEach(name => {
+        const solved = solvedStudents.has(name.toLowerCase());
+        const row = document.createElement('div');
+        row.className = `roster-row ${solved ? 'roster-solved' : 'roster-missing-row'}`;
+        row.innerHTML = `
+            <div>
+                <span>${solved ? '✅' : '❌'}</span>
+                <strong>${name}</strong>
+                ${solved ? '<small style="color:#27ae60;"> — Test çözmüş</small>' : '<small style="color:#e74c3c;"> — Henüz çözmedi</small>'}
+            </div>
+            <button class="btn-icon" onclick="removeFromRoster('${name.replace(/'/g, "\\'")}')" title="Listeden kaldır">🗑️</button>`;
+        container.appendChild(row);
+    });
+
+    // Çözmeyenler özeti
+    const missing = roster.filter(n => !solvedStudents.has(n.toLowerCase()));
+    if (missingContainer) {
+        if (missing.length > 0) {
+            missingContainer.innerHTML = `
+                <div class="roster-alert">
+                    <strong>⚠️ ${missing.length} öğrenci henüz test çözmedi:</strong>
+                    <p>${missing.join(', ')}</p>
+                </div>`;
+        } else {
+            missingContainer.innerHTML = `<p style="color:#27ae60; font-weight:bold;">🎉 Tüm öğrenciler en az bir test çözmüş!</p>`;
+        }
+    }
+}
+
+// ================================================================
+// Rozet / Başarı Sistemi
+// ================================================================
+const BADGE_DEFS = [
+    { id: 'first_quiz',    icon: '🎯', title: 'İlk Adım',          desc: 'İlk sınavını tamamladın!',          check: (h) => h.length >= 1 },
+    { id: 'five_quizzes',  icon: '🏅', title: '5 Sınav Tamam',     desc: '5 sınav çözdün!',                    check: (h) => h.length >= 5 },
+    { id: 'ten_quizzes',   icon: '🏆', title: '10 Sınav Şampiyonu', desc: '10 sınav çözdün, harikasın!',       check: (h) => h.length >= 10 },
+    { id: 'perfect',       icon: '💯', title: 'Mükemmel Sınav',     desc: 'Bir sınavda %100 aldın!',           check: (h) => h.some(d => { const t = d.correct + d.wrong + (d.empty||0); return t > 0 && d.correct === t; }) },
+    { id: 'streak3',       icon: '🔥', title: '3\'lü Seri',         desc: 'Arka arkaya 3 kez %80+ aldın!',    check: (h) => checkStreak(h, 80, 3) },
+    { id: 'streak5',       icon: '🔥🔥', title: '5\'li Seri',       desc: 'Arka arkaya 5 kez %80+ aldın!',    check: (h) => checkStreak(h, 80, 5) },
+    { id: 'fast_solver',   icon: '⚡', title: 'Hız Ustası',         desc: 'Bir sınavı 5 dakikadan kısa sürede bitirdin!', check: (h) => h.some(d => parseTime(d.timeTaken) > 0 && parseTime(d.timeTaken) < 300) },
+    { id: 'improver',      icon: '📈', title: 'Gelişim Göstergesi', desc: 'Son sınavın öncekinden en az 20 puan daha iyi!', check: (h) => checkImprovement(h, 20) },
+    { id: 'addition_master',       icon: '➕', title: 'Toplama Ustası',      desc: 'Toplamada %90+ aldın!', check: (h) => checkOpMastery(h, 'addition', 90) },
+    { id: 'subtraction_master',    icon: '➖', title: 'Çıkarma Ustası',      desc: 'Çıkarmada %90+ aldın!', check: (h) => checkOpMastery(h, 'subtraction', 90) },
+    { id: 'multiplication_master', icon: '✖️', title: 'Çarpma Ustası',       desc: 'Çarpmada %90+ aldın!', check: (h) => checkOpMastery(h, 'multiplication', 90) },
+    { id: 'division_master',       icon: '➗', title: 'Bölme Ustası',        desc: 'Bölmede %90+ aldın!', check: (h) => checkOpMastery(h, 'division', 90) },
+    { id: 'all_ops',       icon: '🌟', title: 'Dört İşlem Kahramanı', desc: 'Tüm işlem türlerinde sınav çözdün!', check: (h) => { const ops = new Set(h.map(d => d.operation)); return ['addition','subtraction','multiplication','division'].every(o => ops.has(o)); } }
+];
+
+function parseTime(str) {
+    if (!str) return 0;
+    const parts = str.split(':').map(Number);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+}
+
+function checkStreak(history, threshold, count) {
+    const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+    let streak = 0;
+    for (const d of sorted) {
+        const total = d.correct + d.wrong + (d.empty || 0);
+        const pct = total > 0 ? (d.correct / total) * 100 : 0;
+        streak = pct >= threshold ? streak + 1 : 0;
+        if (streak >= count) return true;
+    }
+    return false;
+}
+
+function checkImprovement(history, minJump) {
+    if (history.length < 2) return false;
+    const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+    for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1], curr = sorted[i];
+        const tP = prev.correct + prev.wrong + (prev.empty || 0);
+        const tC = curr.correct + curr.wrong + (curr.empty || 0);
+        if (tP > 0 && tC > 0) {
+            const pctP = (prev.correct / tP) * 100;
+            const pctC = (curr.correct / tC) * 100;
+            if (pctC - pctP >= minJump) return true;
+        }
+    }
+    return false;
+}
+
+function checkOpMastery(history, operation, threshold) {
+    return history.some(d => {
+        if (d.operation !== operation) return false;
+        const total = d.correct + d.wrong + (d.empty || 0);
+        return total > 0 && (d.correct / total) * 100 >= threshold;
+    });
+}
+
+function getEarnedBadges(studentHistory) {
+    return BADGE_DEFS.filter(b => b.check(studentHistory));
+}
+
+function renderBadgesInResult() {
+    const container = document.getElementById('result-badges');
+    if (!container) return;
+
+    // Mevcut öğrencinin geçmişini bul (cachedHistory + bu sınav)
+    const myHistory = cachedHistory.filter(d => d.studentName === state.studentName);
+    // Şu anki sınav sonucunu da ekle
+    const currentResult = {
+        studentName: state.studentName,
+        operation: state.operation,
+        grade: state.grade,
+        correct: parseInt(document.querySelector('.stat-correct .stat-value')?.textContent || '0'),
+        wrong: parseInt(document.querySelector('.stat-wrong .stat-value')?.textContent || '0'),
+        empty: parseInt(document.querySelector('.stat-empty .stat-value')?.textContent || '0'),
+        timeTaken: document.getElementById('student-timer')?.textContent || '00:00',
+        date: new Date().toISOString()
+    };
+    const fullHistory = [...myHistory, currentResult];
+
+    const earned = getEarnedBadges(fullHistory);
+    if (earned.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = `
+        <h3 style="margin-bottom:10px;">🏆 Kazanılan Rozetler</h3>
+        <div class="badges-grid">
+            ${earned.map(b => `
+                <div class="badge-card" title="${b.desc}">
+                    <span class="badge-icon">${b.icon}</span>
+                    <span class="badge-title">${b.title}</span>
+                </div>
+            `).join('')}
+        </div>`;
+}
+
+function renderBadgesInTeacherPanel(studentName) {
+    const myHistory = cachedHistory.filter(d => d.studentName === studentName);
+    const earned = getEarnedBadges(myHistory);
+    if (earned.length === 0) return '';
+    return `<div style="margin-top:8px;">${earned.map(b => `<span class="badge badge-earned" title="${b.desc}">${b.icon} ${b.title}</span>`).join(' ')}</div>`;
+}
+
+// ================================================================
+// Özellik 6: Kod Yenileme (Geçmiş Taşıma ile)
+// ================================================================
+window.renewTeacherCode = async () => {
+    if (!state.teacherCode) return alert('Önce giriş yapın.');
+
+    const sure = confirm(
+        '⚠️ DİKKAT: Sınıf kodunuz değişecektir!\n\n' +
+        '• Yeni bir kod üretilecek\n' +
+        '• Tüm geçmiş ve öğrenci verileri yeni koda taşınacak\n' +
+        '• Eski kod artık çalışmayacak\n' +
+        '• Öğrencilere yeni kodu paylaşmanız gerekecek\n\n' +
+        'Devam etmek istiyor musunuz?'
+    );
+    if (!sure) return;
+
+    const statusEl = document.getElementById('renew-status');
+    statusEl.textContent = '⏳ Yeni kod üretiliyor...';
+
+    try {
+        const oldCode = state.teacherCode;
+
+        // 1. Yeni benzersiz kod üret
+        let newCode = '';
+        let exists = true;
+        while (exists) {
+            newCode = generateCode();
+            const check = await api(`/teachers/${newCode}/exists`);
+            exists = check.exists;
+        }
+
+        statusEl.textContent = '⏳ Veriler taşınıyor...';
+
+        // 2. Sunucu tarafında batch taşıma (history + students + teacher)
+        await api(`/teachers/${oldCode}/renew`, 'POST', { newCode });
+
+        // 3. Roster'ı localStorage'da taşı
+        const oldRoster = localStorage.getItem(`md_roster_${oldCode}`);
+        if (oldRoster) {
+            localStorage.setItem(`md_roster_${newCode}`, oldRoster);
+            localStorage.removeItem(`md_roster_${oldCode}`);
+        }
+
+        // 4. State güncelle
+        state.teacherCode = newCode;
+
+        // 5. Panel güncelle
+        document.getElementById('panel-code-badge').textContent = `KOD: ${formatCode(newCode)}`;
+        statusEl.innerHTML = `✅ Tamamlandı! Yeni kod: <strong>${formatCode(newCode)}</strong>`;
+
+        alert(
+            `✅ Kod yenileme başarılı!\n\n` +
+            `Yeni Kod: ${formatCode(newCode)}\n\n` +
+            `⚠️ Bu kodu öğrencilerinize paylaşmayı unutmayın!`
+        );
+
+        // 6. Geçmişi yeniden yükle
+        await loadTeacherHistory();
+        await loadStudentPinList();
+
+    } catch (err) {
+        console.error('Kod yenileme hatası:', err);
+        statusEl.textContent = '❌ Hata oluştu.';
+        alert('Kod yenileme sırasında hata oluştu: ' + err.message);
+    }
+};
+
+// ================================================================
+// Özellik 7: Çevrimdışı Yedekleme (Pending Results)
+// ================================================================
+const PENDING_KEY = 'md_pending_results';
+
+function getPendingResults() {
+    try {
+        return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    } catch { return []; }
+}
+
+function savePendingResult(result, teacherCode) {
+    const pending = getPendingResults();
+    pending.push({ result, teacherCode, savedAt: new Date().toISOString() });
+    localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+    updateOfflineBanner();
+}
+
+function clearPendingResults() {
+    localStorage.removeItem(PENDING_KEY);
+    updateOfflineBanner();
+}
+
+function updateOfflineBanner() {
+    const banner = document.getElementById('offline-banner');
+    if (!banner) return;
+    const pending = getPendingResults();
+    banner.style.display = pending.length > 0 ? 'flex' : 'none';
+}
+
+window.retryPendingResults = async () => {
+    const pending = getPendingResults();
+    if (pending.length === 0) return;
+
+    const banner = document.getElementById('offline-banner');
+    if (banner) banner.innerHTML = '⏳ Gönderiliyor...';
+
+    const failed = [];
+    for (const item of pending) {
+        try {
+            await api(`/teachers/${item.teacherCode}/history`, 'POST', item.result);
+        } catch {
+            failed.push(item);
+        }
+    }
+
+    if (failed.length > 0) {
+        localStorage.setItem(PENDING_KEY, JSON.stringify(failed));
+        alert(`${pending.length - failed.length} sonuç gönderildi, ${failed.length} hâlâ bekliyor.`);
+    } else {
+        clearPendingResults();
+        alert('✅ Tüm bekleyen sonuçlar başarıyla gönderildi!');
+    }
+    updateOfflineBanner();
+};
+
+// Sayfa yüklenince bekleyen sonuçları kontrol et ve otomatik gönder
+setTimeout(async () => {
+    updateOfflineBanner();
+    const pending = getPendingResults();
+    if (pending.length > 0) {
+        const failed = [];
+        for (const item of pending) {
+            try {
+                await api(`/teachers/${item.teacherCode}/history`, 'POST', item.result);
+            } catch {
+                failed.push(item);
+            }
+        }
+        if (failed.length > 0) {
+            localStorage.setItem(PENDING_KEY, JSON.stringify(failed));
+        } else {
+            clearPendingResults();
+        }
+        updateOfflineBanner();
+    }
+}, 3000);
+
+// ================================================================
+// Özellik 8: PDF Rapor Oluşturma
+// ================================================================
+function createPDF() {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    pdf.setFont('helvetica');
+    return pdf;
+}
+
+function pdfHeader(pdf, title) {
+    pdf.setFontSize(18);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Matematik Dehasi', 105, 15, { align: 'center' });
+    pdf.setFontSize(10);
+    pdf.setTextColor(120, 120, 120);
+    pdf.text(new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' }), 105, 22, { align: 'center' });
+    pdf.setDrawColor(52, 152, 219);
+    pdf.setLineWidth(0.5);
+    pdf.line(15, 25, 195, 25);
+    pdf.setFontSize(14);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text(title, 105, 33, { align: 'center' });
+    return 42;
+}
+
+function pdfStudentReport(pdf, studentName, history, startY) {
+    let y = startY;
+    const studentHistory = history.filter(d => d.studentName === studentName);
+    if (studentHistory.length === 0) return y;
+
+    const totalExams = studentHistory.length;
+    const avgScore = Math.round(studentHistory.reduce((s, d) => {
+        const total = d.correct + d.wrong + d.empty;
+        return s + (total > 0 ? (d.correct / total) * 100 : 0);
+    }, 0) / totalExams);
+
+    const ops = {};
+    studentHistory.forEach(d => {
+        if (!ops[d.operation]) ops[d.operation] = { correct: 0, total: 0 };
+        ops[d.operation].correct += d.correct;
+        ops[d.operation].total += d.correct + d.wrong + d.empty;
+    });
+
+    // Ogrenci adi
+    pdf.setFontSize(12);
+    pdf.setTextColor(41, 128, 185);
+    pdf.text(`Ogrenci: ${studentName}`, 15, y);
+    y += 8;
+
+    // Ozet
+    pdf.setFontSize(10);
+    pdf.setTextColor(60, 60, 60);
+    pdf.text(`Toplam Sinav: ${totalExams}    |    Ortalama Basari: %${avgScore}`, 15, y);
+    y += 8;
+
+    // Islem Bazli tablo
+    pdf.setFillColor(236, 240, 241);
+    pdf.rect(15, y, 180, 7, 'F');
+    pdf.setFontSize(9);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Islem', 18, y + 5);
+    pdf.text('Sinav', 80, y + 5);
+    pdf.text('Dogru', 110, y + 5);
+    pdf.text('Basari', 150, y + 5);
+    y += 9;
+
+    const opNames = { addition: 'Toplama', subtraction: 'Cikarma', multiplication: 'Carpma', division: 'Bolme' };
+    Object.entries(ops).forEach(([op, data]) => {
+        const pct = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0;
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(opNames[op] || op, 18, y + 4);
+        const examCount = studentHistory.filter(d => d.operation === op).length;
+        pdf.text(String(examCount), 80, y + 4);
+        pdf.text(`${data.correct}/${data.total}`, 110, y + 4);
+
+        if (pct >= 80) pdf.setTextColor(39, 174, 96);
+        else if (pct >= 50) pdf.setTextColor(243, 156, 18);
+        else pdf.setTextColor(231, 76, 60);
+        pdf.text(`%${pct}`, 150, y + 4);
+        y += 7;
+    });
+
+    y += 3;
+
+    // Son 5 sinav
+    const recent = studentHistory.slice(0, 5);
+    if (recent.length > 0) {
+        pdf.setFontSize(10);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text('Son Sinavlar:', 15, y);
+        y += 6;
+
+        pdf.setFillColor(236, 240, 241);
+        pdf.rect(15, y, 180, 7, 'F');
+        pdf.setFontSize(8);
+        pdf.text('Tarih', 18, y + 5);
+        pdf.text('Islem', 55, y + 5);
+        pdf.text('Dogru', 95, y + 5);
+        pdf.text('Yanlis', 120, y + 5);
+        pdf.text('Bos', 142, y + 5);
+        pdf.text('Sure', 162, y + 5);
+        y += 9;
+
+        recent.forEach(d => {
+            if (y > 270) { pdf.addPage(); y = 20; }
+            const date = new Date(d.date).toLocaleDateString('tr-TR');
+            pdf.setTextColor(60, 60, 60);
+            pdf.text(date, 18, y + 4);
+            pdf.text(opNames[d.operation] || d.operation, 55, y + 4);
+            pdf.text(String(d.correct), 95, y + 4);
+            pdf.text(String(d.wrong), 120, y + 4);
+            pdf.text(String(d.empty), 142, y + 4);
+            pdf.text(d.timeTaken || '-', 162, y + 4);
+            y += 6;
+        });
+    }
+
+    y += 5;
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(15, y, 195, y);
+    y += 8;
+
+    return y;
+}
+
+window.generateStudentPDF = () => {
+    const select = document.getElementById('pdf-student-select');
+    if (!select) return;
+    const studentName = select.value;
+    if (!studentName) return alert('Lutfen bir ogrenci secin.');
+
+    const pdf = createPDF();
+    let y = pdfHeader(pdf, `Ogrenci Performans Raporu`);
+    y = pdfStudentReport(pdf, studentName, cachedHistory, y);
+
+    // Alt bilgi
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+    pdf.save(`MatematikDehasi_${studentName.replace(/\s+/g, '_')}_Rapor.pdf`);
+};
+
+window.generateClassPDF = () => {
+    if (cachedHistory.length === 0) return alert('Henuz sinav verisi yok.');
+
+    const pdf = createPDF();
+    let y = pdfHeader(pdf, `Sinif Performans Raporu`);
+
+    // Genel istatistik
+    const students = [...new Set(cachedHistory.map(d => d.studentName))];
+    const totalExams = cachedHistory.length;
+    const avgScore = Math.round(cachedHistory.reduce((s, d) => {
+        const total = d.correct + d.wrong + d.empty;
+        return s + (total > 0 ? (d.correct / total) * 100 : 0);
+    }, 0) / totalExams);
+
+    pdf.setFontSize(11);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text(`Ogretmen: ${state.teacherName}    |    Kod: ${formatCode(state.teacherCode)}`, 15, y);
+    y += 7;
+    pdf.text(`Toplam: ${totalExams} sinav, ${students.length} ogrenci    |    Genel Ortalama: %${avgScore}`, 15, y);
+    y += 12;
+
+    // Her öğrenci
+    students.sort().forEach(name => {
+        if (y > 230) { pdf.addPage(); y = 20; }
+        y = pdfStudentReport(pdf, name, cachedHistory, y);
+    });
+
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+    pdf.save(`MatematikDehasi_Sinif_Raporu_${formatCode(state.teacherCode)}.pdf`);
+};
+
+// Öğrenci sonuç ekranından PDF indirme
+window.downloadResultPDF = () => {
+    const pdf = createPDF();
+    let y = pdfHeader(pdf, 'Sinav Sonuc Raporu');
+
+    pdf.setFontSize(11);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text(`Ogrenci: ${state.studentName}`, 15, y);
+    y += 7;
+
+    const pctText = document.querySelector('.result-score-fill')?.parentElement?.nextElementSibling?.textContent || '';
+    const time = document.querySelector('.stat-time .stat-value')?.textContent || '';
+    pdf.text(`Sonuc: ${pctText.trim()}    |    Sure: ${time}`, 15, y);
+    y += 10;
+
+    // Soru detaylari
+    pdf.setFillColor(236, 240, 241);
+    pdf.rect(15, y, 180, 7, 'F');
+    pdf.setFontSize(9);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('#', 18, y + 5);
+    pdf.text('Soru', 30, y + 5);
+    pdf.text('Cevap', 110, y + 5);
+    pdf.text('Dogru Cevap', 145, y + 5);
+    y += 9;
+
+    cachedResults.forEach((r, i) => {
+        if (y > 275) { pdf.addPage(); y = 20; }
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(`${i + 1}.`, 18, y + 4);
+        pdf.text(r.q || '', 30, y + 4);
+
+        if (r.status === 'correct') {
+            pdf.setTextColor(39, 174, 96);
+            pdf.text(String(r.correct), 110, y + 4);
+        } else if (r.status === 'wrong') {
+            pdf.setTextColor(231, 76, 60);
+            pdf.text(String(r.given), 110, y + 4);
+        } else {
+            pdf.setTextColor(150, 150, 150);
+            pdf.text('-', 110, y + 4);
+        }
+        pdf.setTextColor(60, 60, 60);
+        pdf.text(String(r.correct), 145, y + 4);
+        y += 6;
+    });
+
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+    pdf.save(`MatematikDehasi_${state.studentName.replace(/\s+/g, '_')}_Sonuc.pdf`);
+};
+
+// PDF öğrenci seçim listesini güncelle
+function updatePdfStudentList() {
+    const select = document.getElementById('pdf-student-select');
+    if (!select) return;
+    const students = [...new Set(cachedHistory.map(d => d.studentName))].sort();
+    select.innerHTML = '<option value="">-- Ogrenci Secin --</option>' +
+        students.map(s => `<option value="${s}">${s}</option>`).join('');
+}

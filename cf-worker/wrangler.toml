@@ -1,0 +1,8 @@
+name = "matematik-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "matematik-dehasi"
+database_id = "3bbe89fc-4a45-4e39-aa94-278a9ae5b63c"

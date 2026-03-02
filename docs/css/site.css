@@ -491,3 +491,117 @@ input:focus, select:focus { border-color: var(--primary); }
     .result-tabs { gap: 4px; }
     .result-tab { font-size: 0.75rem; padding: 8px 4px; }
 }
+
+/* İstatistik Paneli */
+.stats-overview {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;
+}
+.stat-card {
+    text-align: center; padding: 14px 8px; border-radius: 12px;
+    background: #f8fbfe; border: 1px solid var(--border);
+}
+.stat-card .stat-number { font-size: 1.4rem; font-weight: 800; }
+.stat-card .stat-desc { font-size: 0.75rem; color: #888; margin-top: 2px; }
+.sc-blue .stat-number { color: var(--primary); }
+.sc-green .stat-number { color: #27ae60; }
+.sc-yellow .stat-number { color: #f39c12; }
+.sc-red .stat-number { color: #e74c3c; }
+
+.stats-op-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px; }
+.stats-op-card { padding: 12px; background: #f8fbfe; border-radius: 10px; border: 1px solid var(--border); }
+.stats-bar-bg { height: 6px; background: #eee; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.stats-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+
+.grade-stats-list { display: flex; flex-direction: column; gap: 10px; }
+.grade-stat-card { padding: 12px 16px; background: #f8fbfe; border-radius: 12px; border: 1px solid var(--border); }
+.grade-stat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.grade-stat-details { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.8rem; color: #666; margin-top: 8px; }
+
+/* Deneme sayısı badge */
+.badge-attempt { background: #3498db22; color: #2980b9; border: 1px solid #3498db55; font-size: 0.7rem; }
+
+/* Süre uyarı stilleri */
+.timer-warning { color: #f39c12 !important; animation: pulse-timer 1s ease-in-out infinite; }
+.timer-danger { color: #e74c3c !important; animation: pulse-timer 0.5s ease-in-out infinite; font-size: 1.2rem; }
+@keyframes pulse-timer { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+@media (max-width: 500px) {
+    .stats-overview { grid-template-columns: repeat(2, 1fr); }
+    .stats-op-grid { grid-template-columns: 1fr; }
+    .badges-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ========== Yoklama Listesi (Roster) ========== */
+.roster-input-row { display: flex; gap: 10px; margin-bottom: 15px; }
+.roster-input-row input { flex: 1; }
+.roster-input-row button { width: auto; white-space: nowrap; }
+
+.roster-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
+
+.roster-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-radius: 10px; border: 1px solid #e0e0e0;
+    transition: background 0.2s;
+}
+.roster-solved { background: #e8f5e9; border-color: #a5d6a7; }
+.roster-missing-row { background: #fef2f2; border-color: #f5c6cb; }
+
+.roster-row strong { margin-left: 6px; }
+.roster-row small { margin-left: 4px; font-size: 0.8rem; }
+
+.roster-alert {
+    margin-top: 12px; padding: 14px; border-radius: 10px;
+    background: #fff3cd; border: 1px solid #ffc107; color: #856404;
+}
+.roster-alert p { margin: 6px 0 0; font-size: 0.9rem; }
+
+.btn-icon {
+    background: none; border: none; cursor: pointer; font-size: 1.1rem;
+    padding: 4px 8px; border-radius: 6px; transition: background 0.2s;
+}
+.btn-icon:hover { background: #f8d7da; }
+
+/* ========== Rozet / Badge Sistemi ========== */
+.badges-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px;
+}
+.badge-card {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 14px 8px; border-radius: 12px; background: linear-gradient(135deg, #fff9e6, #fff3cc);
+    border: 1px solid #f0d060; text-align: center; transition: transform 0.2s, box-shadow 0.2s;
+    animation: badge-pop 0.4s ease-out;
+}
+.badge-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(240,208,96,0.4); }
+.badge-icon { font-size: 2rem; margin-bottom: 6px; }
+.badge-title { font-size: 0.75rem; font-weight: 700; color: #8b6914; }
+
+@keyframes badge-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    70% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Öğretmen panelinde küçük badge */
+.badge-earned {
+    display: inline-block; padding: 3px 8px; margin: 2px;
+    border-radius: 20px; font-size: 0.7rem; font-weight: 600;
+    background: linear-gradient(135deg, #fff9e6, #fff3cc); border: 1px solid #f0d060;
+    color: #8b6914;
+}
+
+#result-badges { margin-top: 20px; }
+
+/* ========== Offline Banner ========== */
+.offline-banner {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
+    padding: 12px 20px; background: #fff3cd; border-bottom: 2px solid #ffc107;
+    color: #856404; font-size: 0.9rem; font-weight: 500; text-align: center;
+}
+
+/* ========== Kod Yenileme ========== */
+.btn-warning {
+    background: linear-gradient(135deg, #f39c12, #e67e22); color: #fff;
+    border: none; padding: 10px 20px; border-radius: 10px; font-weight: 600;
+    cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-warning:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(243,156,18,0.4); }
