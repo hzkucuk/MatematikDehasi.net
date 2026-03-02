@@ -24,7 +24,7 @@ export default {
       // ==================== SETTINGS ====================
       if (path === '/api/settings/master' && method === 'GET') {
         const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?')
-          .bind('registrationPin').first();
+          .bind('master').first();
         return json(row || { value: 'ogretmen2025' }, corsHeaders);
       }
 
