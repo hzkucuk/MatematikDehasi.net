@@ -182,10 +182,30 @@
         </div>
 
         <h3 style="margin-bottom:15px;">📋 Öğrenci Sonuçları</h3>
+
+        <div class="history-toolbar">
+            <div class="history-toolbar-row">
+                <input type="text" id="history-search" placeholder="🔍 Öğrenci ara..." oninput="onHistoryFilterChange()">
+                <select id="history-group-by" onchange="onHistoryFilterChange()">
+                    <option value="none">Gruplama Yok</option>
+                    <option value="student">👤 Öğrenciye Göre</option>
+                    <option value="date">📅 Tarihe Göre</option>
+                    <option value="operation">➕ İşleme Göre</option>
+                </select>
+                <select id="history-page-size" onchange="onHistoryPageSizeChange()">
+                    <option value="10">10 / sayfa</option>
+                    <option value="25">25 / sayfa</option>
+                    <option value="50">50 / sayfa</option>
+                    <option value="100">100 / sayfa</option>
+                </select>
+            </div>
+        </div>
+
         <div class="history-filter" id="history-grade-filter"></div>
         <div class="history-list" id="teacher-history">
             <p>Yükleniyor...</p>
         </div>
+        <div class="history-pagination" id="history-pagination"></div>
     </section>
 
     <!-- ========== ÖĞRENCİ GİRİŞ ========== -->
@@ -271,7 +291,8 @@
 
 <!-- MODAL -->
 <div id="modal-detail" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="position:relative;">
+        <button onclick="closeModal()" style="position:absolute; top:10px; right:15px; background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted); line-height:1;" title="Kapat">&times;</button>
         <h2 id="modal-header-text" style="color:var(--primary); margin-top:0;">Sınav Detayı</h2>
         <div id="modal-body"></div>
         <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="closeModal()">Kapat</button>
