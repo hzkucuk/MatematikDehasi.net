@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="utf-8" />
@@ -7,8 +7,11 @@
     <link rel="stylesheet" href="css/site.css" />
 </head>
 <body>
+<div id="offline-banner" class="offline-banner" style="display:none;">
+    ⚠️ Gönderilmemiş sınav sonucu var. İnternet bağlantınız olduğunda otomatik gönderilecek.
+    <button class="btn-icon" onclick="retryPendingResults()" style="margin-left:8px;">🔄 Tekrar Dene</button>
+</div>
 
-<div id="offline-banner" class="offline-banner" style="display:none;">⚠️ Gönderilmemiş sınav sonucu var. İnternet bağlantınız olduğunda otomatik gönderilecek.<button class="btn-icon" onclick="retryPendingResults()" style="margin-left:8px;">🔄 Tekrar Dene</button></div>
 <div class="container">
 
     <!-- ========== ANA EKRAN ========== -->
@@ -43,9 +46,9 @@
             <h2>📝 Öğretmen Kaydı</h2>
             <p>Bilgilerinizi girin, size özel bir sınıf kodu oluşturulacak.</p>
 
-            <div class="form-card">
+            <form class="form-card" onsubmit="return false" autocomplete="off">
                 <div class="form-section-label">🔒 Kurum Doğrulama</div>
-                <input type="password" id="reg-master" placeholder="Kurum Kayıt Şifresi">
+                <input type="password" id="reg-master" placeholder="Kurum Kayıt Şifresi" autocomplete="off">
                 <div class="form-section-label">👤 Kişisel Bilgiler</div>
                 <input type="text" id="reg-name" placeholder="Adınız Soyadınız" maxlength="50">
                 <div class="form-section-label">🏫 Sınıf Düzeyleri (birden fazla seçilebilir)</div>
@@ -59,11 +62,11 @@
                     <label class="grade-check-item"><input type="checkbox" value="7"><span>7. Sınıf</span></label>
                     <label class="grade-check-item"><input type="checkbox" value="8"><span>8. Sınıf</span></label>
                 </div>
-                <input type="password" id="reg-pin" placeholder="Şifre (en az 4 karakter)">
-                <input type="password" id="reg-pin2" placeholder="Şifre Tekrar">
-                <button class="btn btn-primary" onclick="registerTeacher()">Kayıt Ol</button>
-                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
-            </div>
+                <input type="password" id="reg-pin" placeholder="Şifre (en az 4 karakter)" autocomplete="new-password">
+                <input type="password" id="reg-pin2" placeholder="Şifre Tekrar" autocomplete="new-password">
+                <button type="button" class="btn btn-primary" onclick="registerTeacher()">Kayıt Ol</button>
+                <button type="button" class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </form>
         </div>
     </section>
 
@@ -85,13 +88,13 @@
         <div class="auth-card">
             <h2>👨‍🏫 Öğretmen Girişi</h2>
 
-            <div class="form-card">
+            <form class="form-card" onsubmit="return false" autocomplete="off">
                 <input type="text" id="login-code" placeholder="Sınıf Kodunuz (ör: K7M-3P9)" maxlength="7"
                        style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
-                <input type="password" id="login-pin" placeholder="Şifreniz">
-                <button class="btn btn-primary" onclick="teacherLogin()">Giriş Yap</button>
-                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
-            </div>
+                <input type="password" id="login-pin" placeholder="Şifreniz" autocomplete="current-password">
+                <button type="button" class="btn btn-primary" onclick="teacherLogin()">Giriş Yap</button>
+                <button type="button" class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </form>
         </div>
     </section>
 
@@ -113,30 +116,99 @@
 
         <div class="settings-card">
             <h4>🔐 Şifre Güncelleme</h4>
-            <div style="display:flex; gap:10px;">
-                <input type="password" id="new-pin-input" placeholder="Yeni Şifre">
-                <button class="btn btn-primary" id="save-pin-btn" onclick="updatePin()" style="width:auto">Kaydet</button>
+            <form onsubmit="return false" autocomplete="off" style="display:flex; gap:10px;">
+                <input type="password" id="new-pin-input" placeholder="Yeni Şifre" autocomplete="new-password">
+                <button type="button" class="btn btn-primary" id="save-pin-btn" onclick="updatePin()" style="width:auto">Kaydet</button>
+            </form>
+        </div>
+
+        <div class="settings-card">
+            <h4>⏱️ Sınav Süresi Ayarı</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Öğrencilerin sınavı tamamlaması gereken süreyi belirleyin. Süre dolunca sınav otomatik teslim edilir.</p>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <select id="panel-time-limit" style="flex:1;">
+                    <option value="0">Sınırsız</option>
+                    <option value="600">10 Dakika</option>
+                    <option value="900">15 Dakika</option>
+                    <option value="1200">20 Dakika</option>
+                    <option value="1800">30 Dakika</option>
+                    <option value="3600">60 Dakika</option>
+                </select>
+                <button class="btn btn-primary" onclick="updateTimeLimit()" style="width:auto">Kaydet</button>
             </div>
         </div>
 
         <div class="settings-card">
-            <h4>⏱️ Sınav Süresi Ayarı</h4><p style="color:#888; font-size:0.85rem; margin-top:0;">Öğrencilerin sınavı tamamlaması gereken süreyi belirleyin.</p><div style="display:flex; gap:10px; align-items:center;"><select id="panel-time-limit" style="flex:1;"><option value="0">Sınırsız</option><option value="600">10 Dakika</option><option value="900">15 Dakika</option><option value="1200">20 Dakika</option><option value="1800">30 Dakika</option><option value="3600">60 Dakika</option></select><button class="btn btn-primary" onclick="updateTimeLimit()" style="width:auto">Kaydet</button></div></div><div class="settings-card"><h4>🔑 Öğrenci PIN Yönetimi</h4>
+            <h4>🔑 Öğrenci PIN Yönetimi</h4>
             <p style="color:#888; font-size:0.85rem; margin-top:0;">PIN'ini unutan öğrencinin PIN'ini sıfırlayabilirsiniz. Öğrenci bir sonraki girişte yeni PIN belirler.</p>
             <div id="student-pin-list" class="student-pin-list">
                 <p style="color:#aaa;">Öğrenci listesi yükleniyor...</p>
             </div>
         </div>
 
-        <div class="settings-card"><h4>🔄 Kod Yenileme</h4><p style="color:#888; font-size:0.85rem; margin-top:0;">Güvenlik için sınıf kodunuzu yenileyin. Tüm geçmiş ve öğrenci verileri yeni koda taşınır.</p><div style="display:flex; gap:10px; align-items:center;"><button class="btn btn-warning" onclick="renewTeacherCode()" style="width:auto">🔄 Kodu Yenile</button><span id="renew-status" style="font-size:0.85rem; color:#888;"></span></div></div>
-<div class="settings-card"><h4>📄 PDF Rapor</h4><p style="color:#888; font-size:0.85rem; margin-top:0;">Velilere göndermek için öğrenci performans raporu oluşturun.</p><div style="display:flex; gap:10px; flex-wrap:wrap;"><select id="pdf-student-select" style="flex:1;"><option value="">Yükleniyor...</option></select><button class="btn btn-primary" onclick="generateStudentPDF()" style="width:auto">📄 PDF İndir</button><button class="btn btn-secondary" onclick="generateClassPDF()" style="width:auto">📄 Sınıf Raporu</button></div></div>
-<div class="settings-card"><h4>📋 Sınıf Yoklama Listesi</h4><p style="color:#888; font-size:0.85rem; margin-top:0;">Öğrenci isimlerini ekleyin. Kimlerin test çözdüğünü takip edin.</p><div class="roster-input-row"><input type="text" id="roster-name-input" placeholder="Öğrenci adı girin..."><button class="btn btn-primary" onclick="addToRoster()" style="width:auto">Ekle</button></div><div class="roster-list" id="roster-list"><p style="color:#aaa; font-size:0.85rem;">Henüz öğrenci eklenmedi.</p></div><div id="roster-missing"></div></div>
-<div class="settings-card" id="stats-section"><h4>📊 Sınıf İstatistikleri</h4><p style="color:#888; font-size:0.85rem; margin-top:0;">Genel ve sınıf bazlı performans analizi</p><div id="stats-dashboard"><p style="color:#aaa;">İstatistikler yükleniyor...</p></div></div>
+        <div class="settings-card">
+            <h4>🔄 Kod Yenileme</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Güvenlik için sınıf kodunuzu yenileyin. Tüm geçmiş ve öğrenci verileri yeni koda taşınır.</p>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-warning" onclick="renewTeacherCode()" style="width:auto">🔄 Kodu Yenile</button>
+                <span id="renew-status" style="font-size:0.85rem; color:#888;"></span>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h4>📄 PDF Rapor</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Velilere göndermek için öğrenci performans raporu oluşturun.</p>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <select id="pdf-student-select" style="flex:1;"><option value="">Yükleniyor...</option></select>
+                <button class="btn btn-primary" onclick="generateStudentPDF()" style="width:auto">📄 PDF İndir</button>
+                <button class="btn btn-secondary" onclick="generateClassPDF()" style="width:auto">📄 Sınıf Raporu</button>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h4>📋 Öğrenci Yoklama Listesi</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Sınıfınızdaki öğrenci isimlerini girin. Sistem test çözmeyenleri otomatik gösterir.</p>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <input type="text" id="roster-name-input" placeholder="Öğrenci adı girin" style="flex:1;">
+                <button class="btn btn-primary" onclick="addToRoster()" style="width:auto">Ekle</button>
+            </div>
+            <div id="roster-list" class="roster-list"></div>
+            <div id="roster-missing" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="settings-card" id="stats-section">
+            <h4>📊 Sınıf İstatistikleri</h4>
+            <p style="color:#888; font-size:0.85rem; margin-top:0;">Genel ve sınıf bazlı performans analizi</p>
+            <div id="stats-dashboard">
+                <p style="color:#aaa;">İstatistikler yükleniyor...</p>
+            </div>
+        </div>
 
         <h3 style="margin-bottom:15px;">📋 Öğrenci Sonuçları</h3>
+
+        <div class="history-toolbar">
+            <div class="history-toolbar-row">
+                <input type="text" id="history-search" placeholder="🔍 Öğrenci ara..." oninput="onHistoryFilterChange()">
+                <select id="history-group-by" onchange="onHistoryFilterChange()">
+                    <option value="none">Gruplama Yok</option>
+                    <option value="student">👤 Öğrenciye Göre</option>
+                    <option value="date">📅 Tarihe Göre</option>
+                    <option value="operation">➕ İşleme Göre</option>
+                </select>
+                <select id="history-page-size" onchange="onHistoryPageSizeChange()">
+                    <option value="10">10 / sayfa</option>
+                    <option value="25">25 / sayfa</option>
+                    <option value="50">50 / sayfa</option>
+                    <option value="100">100 / sayfa</option>
+                </select>
+            </div>
+        </div>
+
         <div class="history-filter" id="history-grade-filter"></div>
         <div class="history-list" id="teacher-history">
             <p>Yükleniyor...</p>
         </div>
+        <div class="history-pagination" id="history-pagination"></div>
     </section>
 
     <!-- ========== ÖĞRENCİ GİRİŞ ========== -->
@@ -144,10 +216,10 @@
         <div class="auth-card">
             <h2>🎒 Öğrenci Girişi</h2>
 
-            <div class="form-card">
+            <form class="form-card" onsubmit="return false" autocomplete="off">
                 <input type="text" id="student-code-input" placeholder="Öğretmen Kodunu Gir (ör: K7M-3P9)" maxlength="7"
                        style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
-                <button class="btn btn-secondary" id="btn-validate-code" onclick="validateStudentCode()">🔍 Kodu Doğrula</button>
+                <button type="button" class="btn btn-secondary" id="btn-validate-code" onclick="validateStudentCode()">🔍 Kodu Doğrula</button>
 
                 <div id="student-grade-picker" style="display:none;">
                     <div class="form-section-label">📚 Sınıfını Seç</div>
@@ -162,20 +234,19 @@
                     <div id="student-pin-section" style="display:none;">
                         <div class="form-section-label" id="pin-section-title">🔑 Kişisel PIN</div>
                         <input type="password" id="student-pin" placeholder="4 haneli PIN" maxlength="6" inputmode="numeric"
-                               style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+                               style="text-align:center; letter-spacing:8px; font-size:1.2rem;" autocomplete="off">
                         <div id="student-pin-confirm-wrap" style="display:none; margin-top:10px;">
                             <input type="password" id="student-pin2" placeholder="PIN Tekrar" maxlength="6" inputmode="numeric"
-                                   style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+                                   style="text-align:center; letter-spacing:8px; font-size:1.2rem;" autocomplete="off">
                         </div>
                     </div>
 
                     <select id="operation-select"></select>
-                    
-                    <button class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
+                    <button type="button" class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
                 </div>
 
-                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
-            </div>
+                <button type="button" class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </form>
         </div>
     </section>
 
@@ -209,10 +280,13 @@
                 <button class="result-tab" onclick="filterResults('correct', event)">✅ Doğrular</button>
             </div>
 
-            <div id="result-badges"></div><div id="result-questions"></div>
+            <div id="result-questions"></div>
 
-            <div style="margin-top:30px; display:flex; gap:10px;">
-                <button class="btn btn-primary" style="flex:1" onclick="location.reload()">🏠 Ana Sayfa</button><button class="btn btn-secondary" style="flex:1" onclick="downloadResultPDF()">📄 PDF İndir</button>
+            <div id="result-badges" class="result-badges"></div>
+
+            <div style="margin-top:30px; display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="btn btn-primary" style="flex:1" onclick="location.reload()">🏠 Ana Sayfa</button>
+                <button class="btn btn-secondary" style="flex:1" onclick="downloadResultPDF()">📄 PDF İndir</button>
             </div>
         </div>
     </section>
@@ -220,7 +294,8 @@
 
 <!-- MODAL -->
 <div id="modal-detail" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="position:relative;">
+        <button onclick="closeModal()" style="position:absolute; top:10px; right:15px; background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted); line-height:1;" title="Kapat">&times;</button>
         <h2 id="modal-header-text" style="color:var(--primary); margin-top:0;">Sınav Detayı</h2>
         <div id="modal-body"></div>
         <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="closeModal()">Kapat</button>
@@ -230,11 +305,11 @@
 <!-- MODERN ONAY MODALI -->
 <div id="custom-confirm-modal" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:420px; text-align:center; padding:30px;">
-        <div id="confirm-icon" style="font-size:48px; margin-bottom:15px;">Warning</div>
+        <div id="confirm-icon" style="font-size:48px; margin-bottom:15px;">⚠️</div>
         <h3 id="confirm-title" style="color:var(--text); margin:0 0 10px;">Emin misiniz?</h3>
         <p id="confirm-message" style="color:var(--text-muted); margin-bottom:25px;"></p>
         <div style="display:flex; gap:12px; justify-content:center;">
-            <button class="btn btn-secondary" id="confirm-cancel-btn" style="width:auto; min-width:120px;">Iptal</button>
+            <button class="btn btn-secondary" id="confirm-cancel-btn" style="width:auto; min-width:120px;">İptal</button>
             <button class="btn btn-primary" id="confirm-ok-btn" style="width:auto; min-width:120px;">Tamam</button>
         </div>
     </div>
@@ -295,7 +370,7 @@
                 style="margin-top:15px;">Kabul Ediyorum</button>
     </div>
 </div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script><script src="js/site.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="js/site.js"></script>
 </body>
 </html>

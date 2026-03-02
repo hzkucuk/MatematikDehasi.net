@@ -979,6 +979,25 @@ window.filterResults = (filter, evt) => {
 // ================================================================
 let cachedHistory = [];
 let historyFilterGrade = 'all';
+let historySearchTerm = '';
+let historyGroupBy = 'none';
+let historyPage = 1;
+let historyPageSize = 10;
+
+function onHistoryFilterChange() {
+    historySearchTerm = (document.getElementById('history-search')?.value || '').trim().toLowerCase();
+    historyGroupBy = document.getElementById('history-group-by')?.value || 'none';
+    historyPage = 1;
+    renderHistory();
+}
+window.onHistoryFilterChange = onHistoryFilterChange;
+
+function onHistoryPageSizeChange() {
+    historyPageSize = parseInt(document.getElementById('history-page-size')?.value || '10', 10);
+    historyPage = 1;
+    renderHistory();
+}
+window.onHistoryPageSizeChange = onHistoryPageSizeChange;
 
 async function loadTeacherHistory() {
     const list = document.getElementById('teacher-history');
@@ -1021,14 +1040,14 @@ function renderHistoryFilter() {
     const allBtn = document.createElement('button');
     allBtn.className = `filter-btn ${historyFilterGrade === 'all' ? 'active' : ''}`;
     allBtn.textContent = 'Tümü';
-    allBtn.onclick = () => { historyFilterGrade = 'all'; renderHistoryFilter(); renderHistory(); };
+    allBtn.onclick = () => { historyFilterGrade = 'all'; historyPage = 1; renderHistoryFilter(); renderHistory(); };
     container.appendChild(allBtn);
 
     state.teacherGrades.forEach(g => {
         const btn = document.createElement('button');
         btn.className = `filter-btn ${historyFilterGrade === g ? 'active' : ''}`;
         btn.textContent = `${g}. Sınıf`;
-        btn.onclick = () => { historyFilterGrade = g; renderHistoryFilter(); renderHistory(); };
+        btn.onclick = () => { historyFilterGrade = g; historyPage = 1; renderHistoryFilter(); renderHistory(); };
         container.appendChild(btn);
     });
 }
@@ -1082,29 +1101,39 @@ function detectAnomalies(docs) {
 
 function renderHistory() {
     const list = document.getElementById('teacher-history');
+    const paginationEl = document.getElementById('history-pagination');
     list.innerHTML = "";
+    if (paginationEl) paginationEl.innerHTML = "";
 
-    const filtered = historyFilterGrade === 'all'
+    // 1) Sınıf filtresi
+    let filtered = historyFilterGrade === 'all'
         ? cachedHistory
         : cachedHistory.filter(d => d.grade === historyFilterGrade);
 
+    // 2) Arama filtresi
+    if (historySearchTerm) {
+        filtered = filtered.filter(d =>
+            d.studentName.toLowerCase().includes(historySearchTerm)
+        );
+    }
+
     if (filtered.length === 0) {
-        list.innerHTML = historyFilterGrade === 'all'
-            ? "<p>Hen\u00fcz \u00f6\u011frenci sonucu bulunmuyor. \u00d6\u011frencilerinize kodunuzu verin!</p>"
-            : "<p>Bu s\u0131n\u0131f i\u00e7in hen\u00fcz sonu\u00e7 bulunmuyor.</p>";
+        list.innerHTML = historySearchTerm
+            ? `<p>🔍 "${historySearchTerm}" ile eşleşen sonuç bulunamadı.</p>`
+            : historyFilterGrade === 'all'
+                ? "<p>Henüz öğrenci sonucu bulunmuyor. Öğrencilerinize kodunuzu verin!</p>"
+                : "<p>Bu sınıf için henüz sonuç bulunmuyor.</p>";
         return;
     }
 
     const anomalies = detectAnomalies(cachedHistory);
 
-    // Deneme sayısı hesapla (öğrenci + işlem bazlı)
+    // Deneme sayısı hesapla
     const attemptCounts = {};
     cachedHistory.forEach(d => {
         const key = `${d.studentName}||${d.operation}`;
         attemptCounts[key] = (attemptCounts[key] || 0) + 1;
     });
-
-    // Günlük deneme sayısı
     const todayStr = new Date().toISOString().slice(0, 10);
     const dailyCounts = {};
     cachedHistory.forEach(d => {
@@ -1114,66 +1143,189 @@ function renderHistory() {
         }
     });
 
-    filtered.forEach(d => {
-        const op = OP_MAP[d.operation];
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        const gradeBadge = d.grade ? `<span class="badge badge-grade">${d.grade}. Sınıf</span>` : '';
-        const attemptKey = `${d.studentName}||${d.operation}`;
-        const attemptNum = attemptCounts[attemptKey] || 1;
-        const dailyNum = dailyCounts[attemptKey] || 0;
-        const attemptBadge = attemptNum > 1 ? `<span class="badge badge-attempt" title="Toplam ${attemptNum} deneme, bugün ${dailyNum}">🔄 ${attemptNum}x</span>` : '';
+    // 3) Gruplama
+    if (historyGroupBy !== 'none') {
+        const groups = groupHistoryItems(filtered, historyGroupBy);
+        const groupKeys = Object.keys(groups);
 
-        let anomalyBadges = '';
+        // Gruplama modunda sayfalama grup bazlı
+        const totalGroups = groupKeys.length;
+        const totalPages = Math.max(1, Math.ceil(totalGroups / historyPageSize));
+        if (historyPage > totalPages) historyPage = totalPages;
+        const startIdx = (historyPage - 1) * historyPageSize;
+        const pagedGroupKeys = groupKeys.slice(startIdx, startIdx + historyPageSize);
+
+        pagedGroupKeys.forEach(key => {
+            const items = groups[key];
+            const header = document.createElement('div');
+            header.className = 'history-group-header';
+            header.innerHTML = `<span>${key}</span><span class="group-count">${items.length} sonuç</span>`;
+            list.appendChild(header);
+
+            items.forEach(d => {
+                list.appendChild(buildHistoryItem(d, anomalies, attemptCounts, dailyCounts));
+            });
+        });
+
+        renderPagination(totalPages, filtered.length);
+    } else {
+        // 4) Düz liste + sayfalama
+        const totalPages = Math.max(1, Math.ceil(filtered.length / historyPageSize));
+        if (historyPage > totalPages) historyPage = totalPages;
+        const startIdx = (historyPage - 1) * historyPageSize;
+        const pagedItems = filtered.slice(startIdx, startIdx + historyPageSize);
+
+        pagedItems.forEach(d => {
+            list.appendChild(buildHistoryItem(d, anomalies, attemptCounts, dailyCounts));
+        });
+
+        renderPagination(totalPages, filtered.length);
+    }
+}
+
+function groupHistoryItems(items, groupBy) {
+    const groups = {};
+    items.forEach(d => {
+        let key;
+        switch (groupBy) {
+            case 'student':
+                key = `👤 ${d.studentName}`;
+                break;
+            case 'date':
+                key = `📅 ${new Date(d.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+                break;
+            case 'operation':
+                key = `${(OP_MAP[d.operation] || {}).label || d.operation}`;
+                break;
+            default:
+                key = 'Diğer';
+        }
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(d);
+    });
+    return groups;
+}
+
+function buildHistoryItem(d, anomalies, attemptCounts, dailyCounts) {
+    const op = OP_MAP[d.operation];
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    const gradeBadge = d.grade ? `<span class="badge badge-grade">${d.grade}. Sınıf</span>` : '';
+    const attemptKey = `${d.studentName}||${d.operation}`;
+    const attemptNum = attemptCounts[attemptKey] || 1;
+    const dailyNum = dailyCounts[attemptKey] || 0;
+    const attemptBadge = attemptNum > 1 ? `<span class="badge badge-attempt" title="Toplam ${attemptNum} deneme, bugün ${dailyNum}">🔄 ${attemptNum}x</span>` : '';
+
+    let anomalyBadges = '';
+    if (anomalies.sharedDevices[d.studentName]) {
+        anomalyBadges += `<span class="badge badge-warning" title="Ortak cihaz">⚠️ Ortak Cihaz</span>`;
+    }
+    if (anomalies.scoreAnomalies[d.studentName]) {
+        const a = anomalies.scoreAnomalies[d.studentName];
+        anomalyBadges += `<span class="badge badge-anomaly" title="Ort: %${a.avg} → Son: %${a.latest}">📈 +${a.jump}</span>`;
+    }
+
+    item.innerHTML = `
+        <div>
+            <strong>👤 ${d.studentName}</strong> ${gradeBadge} <span class="badge ${op.badge}">${op.label}</span> ${attemptBadge} ${anomalyBadges}<br>
+            <small>${new Date(d.date).toLocaleString('tr-TR')}${d.timeLimit ? ` ⏱️${d.timeLimit/60}dk` : ''}</small>
+        </div>
+        <div style="text-align:right">
+            <span style="color:green; font-weight:bold;">✅ ${d.correct}</span> |
+            <span style="color:red; font-weight:bold;">❌ ${d.wrong}</span> |
+            <span style="color:gray;">⬜ ${d.empty || 0}</span>
+        </div>`;
+    item.onclick = () => {
+        let deviceAlert = '';
         if (anomalies.sharedDevices[d.studentName]) {
-            anomalyBadges += `<span class="badge badge-warning" title="Ortak cihaz">\u26a0\ufe0f Ortak Cihaz</span>`;
+            const others = anomalies.sharedDevices[d.studentName].join(', ');
+            deviceAlert += `<p style="color:#e74c3c; font-weight:bold;">⚠️ Ortak Cihaz: ${others} ile aynı cihazı kullanıyor</p>`;
         }
         if (anomalies.scoreAnomalies[d.studentName]) {
             const a = anomalies.scoreAnomalies[d.studentName];
-            anomalyBadges += `<span class="badge badge-anomaly" title="Ort: %${a.avg} \u2192 Son: %${a.latest}">\ud83d\udcc8 +${a.jump}</span>`;
+            deviceAlert += `<p style="color:#e67e22; font-weight:bold;">📈 Performans anomalisi: Ortalama %${a.avg} → Son sınav %${a.latest} (+${a.jump})</p>`;
+        }
+        if (d.deviceId) {
+            deviceAlert += `<p style="color:#888; font-size:0.8rem;">📱 Cihaz: ${d.deviceId.substring(0, 8)}...</p>`;
         }
 
-        item.innerHTML = `
-            <div>
-                <strong>👤 ${d.studentName}</strong> ${gradeBadge} <span class="badge ${op.badge}">${op.label}</span> ${attemptBadge} ${anomalyBadges}<br>
-                <small>${new Date(d.date).toLocaleString('tr-TR')}${d.timeLimit ? ` ⏱️${d.timeLimit/60}dk` : ''}</small>
-            </div>
-            <div style="text-align:right">
-                <span style="color:green; font-weight:bold;">✅ ${d.correct}</span> |
-                <span style="color:red; font-weight:bold;">❌ ${d.wrong}</span> |
-                <span style="color:gray;">⬜ ${d.empty}</span>
-            </div>`;
-        item.onclick = () => {
-            let deviceAlert = '';
-            if (anomalies.sharedDevices[d.studentName]) {
-                const others = anomalies.sharedDevices[d.studentName].join(', ');
-                deviceAlert += `<p style="color:#e74c3c; font-weight:bold;">\u26a0\ufe0f Ortak Cihaz: ${others} ile ayn\u0131 cihaz\u0131 kullan\u0131yor</p>`;
-            }
-            if (anomalies.scoreAnomalies[d.studentName]) {
-                const a = anomalies.scoreAnomalies[d.studentName];
-                deviceAlert += `<p style="color:#e67e22; font-weight:bold;">\ud83d\udcc8 Performans anomalisi: Ortalama %${a.avg} \u2192 Son s\u0131nav %${a.latest} (+${a.jump})</p>`;
-            }
-            if (d.deviceId) {
-                deviceAlert += `<p style="color:#888; font-size:0.8rem;">\ud83d\udcf1 Cihaz: ${d.deviceId.substring(0, 8)}...</p>`;
-            }
+        document.getElementById('modal-body').innerHTML = `
+            ${deviceAlert}
+            <p><strong>Öğrenci:</strong> ${d.studentName}</p>
+            <p><strong>Süre:</strong> ${d.timeTaken}</p>
+            <p><strong>Sonuç:</strong> ${d.correct} Doğru, ${d.wrong} Yanlış, ${d.empty || 0} Boş</p>
+            ${renderBadgesInTeacherPanel(d.studentName)}
+            <hr>
+            <h4>Hatalı Sorular:</h4>
+            ${d.mistakes && d.mistakes.length > 0 ? d.mistakes.map(m => `
+                <div style="padding:10px; border-bottom:1px solid #eee;">
+                    <b>${m.q}</b> → Doğru: ${m.r}, Seçilen: <span style="color:red">${m.y}</span>
+                </div>
+            `).join('') : (d.correct === 0 && (d.empty || 0) > 0
+                ? '<p style="color:#e67e22; font-weight:bold;">⬜ Tüm sorular boş bırakıldı.</p>'
+                : d.correct === 0 && d.wrong === 0
+                    ? '<p style="color:#888;">Soru detayı bulunamadı.</p>'
+                    : '<p>Hata yok! 🎉</p>')}`;
+        document.getElementById('modal-detail').style.display = 'flex';
+    };
+    return item;
+}
 
-            document.getElementById('modal-body').innerHTML = `
-                ${deviceAlert}
-                <p><strong>Öğrenci:</strong> ${d.studentName}</p>
-                <p><strong>Süre:</strong> ${d.timeTaken}</p>
-                <p><strong>Sonuç:</strong> ${d.correct} Doğru, ${d.wrong} Yanlış, ${d.empty} Boş</p>
-                ${renderBadgesInTeacherPanel(d.studentName)}
-                <hr>
-                <h4>Hatalı Sorular:</h4>
-                ${d.mistakes && d.mistakes.length > 0 ? d.mistakes.map(m => `
-                    <div style="padding:10px; border-bottom:1px solid #eee;">
-                        <b>${m.q}</b> → Doğru: ${m.r}, Seçilen: <span style="color:red">${m.y}</span>
-                    </div>
-                `).join('') : "<p>Hata yok! 🎉</p>"}`;
-            document.getElementById('modal-detail').style.display = 'flex';
-        };
-        list.appendChild(item);
+function renderPagination(totalPages, totalItems) {
+    const container = document.getElementById('history-pagination');
+    if (!container || totalPages <= 1) return;
+
+    container.innerHTML = '';
+
+    // Önceki butonu
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '‹';
+    prevBtn.disabled = historyPage <= 1;
+    prevBtn.onclick = () => { historyPage--; renderHistory(); };
+    container.appendChild(prevBtn);
+
+    // Sayfa numaraları (akıllı aralık)
+    const pages = getPageRange(historyPage, totalPages);
+    pages.forEach(p => {
+        if (p === '...') {
+            const dots = document.createElement('span');
+            dots.className = 'page-info';
+            dots.textContent = '…';
+            container.appendChild(dots);
+        } else {
+            const btn = document.createElement('button');
+            btn.textContent = p;
+            btn.className = p === historyPage ? 'active' : '';
+            btn.onclick = () => { historyPage = p; renderHistory(); };
+            container.appendChild(btn);
+        }
     });
+
+    // Sonraki butonu
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '›';
+    nextBtn.disabled = historyPage >= totalPages;
+    nextBtn.onclick = () => { historyPage++; renderHistory(); };
+    container.appendChild(nextBtn);
+
+    // Bilgi metni
+    const info = document.createElement('span');
+    info.className = 'page-info';
+    info.textContent = `${totalItems} sonuç`;
+    container.appendChild(info);
+}
+
+function getPageRange(current, total) {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages = [];
+    pages.push(1);
+    if (current > 3) pages.push('...');
+    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+        pages.push(i);
+    }
+    if (current < total - 2) pages.push('...');
+    pages.push(total);
+    return pages;
 }
 
 // ================================================================
@@ -1449,14 +1601,14 @@ function renderRoster() {
 // Rozet / Başarı Sistemi
 // ================================================================
 const BADGE_DEFS = [
-    { id: 'first_quiz',    icon: '🎯', title: 'İlk Adım',          desc: 'İlk sınavını tamamladın!',          check: (h) => h.length >= 1 },
-    { id: 'five_quizzes',  icon: '🏅', title: '5 Sınav Tamam',     desc: '5 sınav çözdün!',                    check: (h) => h.length >= 5 },
-    { id: 'ten_quizzes',   icon: '🏆', title: '10 Sınav Şampiyonu', desc: '10 sınav çözdün, harikasın!',       check: (h) => h.length >= 10 },
+    { id: 'first_quiz',    icon: '🎯', title: 'İlk Adım',          desc: 'İlk sınavını tamamladın!',          check: (h) => h.filter(d => d.correct > 0 || d.wrong > 0).length >= 1 },
+    { id: 'five_quizzes',  icon: '🏅', title: '5 Sınav Tamam',     desc: '5 sınav çözdün!',                    check: (h) => h.filter(d => d.correct > 0 || d.wrong > 0).length >= 5 },
+    { id: 'ten_quizzes',   icon: '🏆', title: '10 Sınav Şampiyonu', desc: '10 sınav çözdün, harikasın!',       check: (h) => h.filter(d => d.correct > 0 || d.wrong > 0).length >= 10 },
     { id: 'perfect',       icon: '💯', title: 'Mükemmel Sınav',     desc: 'Bir sınavda %100 aldın!',           check: (h) => h.some(d => { const t = d.correct + d.wrong + (d.empty||0); return t > 0 && d.correct === t; }) },
     { id: 'streak3',       icon: '🔥', title: '3\'lü Seri',         desc: 'Arka arkaya 3 kez %80+ aldın!',    check: (h) => checkStreak(h, 80, 3) },
     { id: 'streak5',       icon: '🔥🔥', title: '5\'li Seri',       desc: 'Arka arkaya 5 kez %80+ aldın!',    check: (h) => checkStreak(h, 80, 5) },
     { id: 'fast_solver',   icon: '⚡', title: 'Hız Ustası',         desc: 'Bir sınavı 5 dakikadan kısa sürede bitirdin!', check: (h) => h.some(d => parseTime(d.timeTaken) > 0 && parseTime(d.timeTaken) < 300) },
-    { id: 'improver',      icon: '📈', title: 'Gelişim Göstergesi', desc: 'Son sınavın öncekinden en az 20 puan daha iyi!', check: (h) => checkImprovement(h, 20) },
+    { id: 'improver',      icon: '📈', title: 'Gelişim Göstergesi', desc: 'Son sınavın öncekinden en az 20 puan daha iyi!', check: (h) => checkImprovement(h.filter(d => d.correct > 0 || d.wrong > 0), 20) },
     { id: 'addition_master',       icon: '➕', title: 'Toplama Ustası',      desc: 'Toplamada %90+ aldın!', check: (h) => checkOpMastery(h, 'addition', 90) },
     { id: 'subtraction_master',    icon: '➖', title: 'Çıkarma Ustası',      desc: 'Çıkarmada %90+ aldın!', check: (h) => checkOpMastery(h, 'subtraction', 90) },
     { id: 'multiplication_master', icon: '✖️', title: 'Çarpma Ustası',       desc: 'Çarpmada %90+ aldın!', check: (h) => checkOpMastery(h, 'multiplication', 90) },
@@ -1704,6 +1856,31 @@ setTimeout(async () => {
 // ================================================================
 // Özellik 8: PDF Rapor Oluşturma
 // ================================================================
+async function ensureJsPDF() {
+    if (window.jspdf) return true;
+    const cdnUrls = [
+        'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+        'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js'
+    ];
+    for (const url of cdnUrls) {
+        try {
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = url;
+                s.onload = resolve;
+                s.onerror = reject;
+                const timer = setTimeout(() => { s.onload = null; s.onerror = null; reject(); }, 8000);
+                s.onload = () => { clearTimeout(timer); resolve(); };
+                s.onerror = () => { clearTimeout(timer); reject(); };
+                document.head.appendChild(s);
+            });
+            if (window.jspdf) return true;
+        } catch { /* sonraki CDN'i dene */ }
+    }
+    return false;
+}
+
 function createPDF() {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -1734,7 +1911,7 @@ function pdfStudentReport(pdf, studentName, history, startY) {
 
     const totalExams = studentHistory.length;
     const avgScore = Math.round(studentHistory.reduce((s, d) => {
-        const total = d.correct + d.wrong + d.empty;
+        const total = d.correct + d.wrong + (d.empty || 0);
         return s + (total > 0 ? (d.correct / total) * 100 : 0);
     }, 0) / totalExams);
 
@@ -1742,7 +1919,7 @@ function pdfStudentReport(pdf, studentName, history, startY) {
     studentHistory.forEach(d => {
         if (!ops[d.operation]) ops[d.operation] = { correct: 0, total: 0 };
         ops[d.operation].correct += d.correct;
-        ops[d.operation].total += d.correct + d.wrong + d.empty;
+        ops[d.operation].total += d.correct + d.wrong + (d.empty || 0);
     });
 
     // Ogrenci adi
@@ -1768,7 +1945,7 @@ function pdfStudentReport(pdf, studentName, history, startY) {
     pdf.text('Basari', 150, y + 5);
     y += 9;
 
-    const opNames = { addition: 'Toplama', subtraction: 'Cikarma', multiplication: 'Carpma', division: 'Bolme' };
+    const opNames = { addition: 'Toplama', subtraction: 'Cikarma', multiplication: 'Carpma', division: 'Bolme', mixed_equations: 'Denklem' };
     Object.entries(ops).forEach(([op, data]) => {
         const pct = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0;
         pdf.setTextColor(60, 60, 60);
@@ -1813,7 +1990,7 @@ function pdfStudentReport(pdf, studentName, history, startY) {
             pdf.text(opNames[d.operation] || d.operation, 55, y + 4);
             pdf.text(String(d.correct), 95, y + 4);
             pdf.text(String(d.wrong), 120, y + 4);
-            pdf.text(String(d.empty), 142, y + 4);
+            pdf.text(String(d.empty || 0), 142, y + 4);
             pdf.text(d.timeTaken || '-', 162, y + 4);
             y += 6;
         });
@@ -1827,110 +2004,144 @@ function pdfStudentReport(pdf, studentName, history, startY) {
     return y;
 }
 
-window.generateStudentPDF = () => {
+window.generateStudentPDF = async () => {
     const select = document.getElementById('pdf-student-select');
     if (!select) return;
     const studentName = select.value;
     if (!studentName) return alert('Lutfen bir ogrenci secin.');
 
-    const pdf = createPDF();
-    let y = pdfHeader(pdf, `Ogrenci Performans Raporu`);
-    y = pdfStudentReport(pdf, studentName, cachedHistory, y);
+    try {
+        if (!await ensureJsPDF()) {
+            alert('PDF kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.');
+            return;
+        }
 
-    // Alt bilgi
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+        const pdf = createPDF();
+        let y = pdfHeader(pdf, `Ogrenci Performans Raporu`);
+        y = pdfStudentReport(pdf, studentName, cachedHistory, y);
 
-    pdf.save(`MatematikDehasi_${studentName.replace(/\s+/g, '_')}_Rapor.pdf`);
+        // Alt bilgi
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+        pdf.save(`MatematikDehasi_${studentName.replace(/\s+/g, '_')}_Rapor.pdf`);
+    } catch (err) {
+        console.error('PDF olusturma hatasi:', err);
+        alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
+    }
 };
 
-window.generateClassPDF = () => {
+window.generateClassPDF = async () => {
     if (cachedHistory.length === 0) return alert('Henuz sinav verisi yok.');
 
-    const pdf = createPDF();
-    let y = pdfHeader(pdf, `Sinif Performans Raporu`);
+    try {
+        if (!await ensureJsPDF()) {
+            alert('PDF kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.');
+            return;
+        }
 
-    // Genel istatistik
-    const students = [...new Set(cachedHistory.map(d => d.studentName))];
-    const totalExams = cachedHistory.length;
-    const avgScore = Math.round(cachedHistory.reduce((s, d) => {
-        const total = d.correct + d.wrong + d.empty;
-        return s + (total > 0 ? (d.correct / total) * 100 : 0);
-    }, 0) / totalExams);
+        const pdf = createPDF();
+        let y = pdfHeader(pdf, `Sinif Performans Raporu`);
 
-    pdf.setFontSize(11);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text(`Ogretmen: ${state.teacherName}    |    Kod: ${formatCode(state.teacherCode)}`, 15, y);
-    y += 7;
-    pdf.text(`Toplam: ${totalExams} sinav, ${students.length} ogrenci    |    Genel Ortalama: %${avgScore}`, 15, y);
-    y += 12;
+        // Genel istatistik
+        const students = [...new Set(cachedHistory.map(d => d.studentName))];
+        const totalExams = cachedHistory.length;
+        const avgScore = Math.round(cachedHistory.reduce((s, d) => {
+            const total = d.correct + d.wrong + (d.empty || 0);
+            return s + (total > 0 ? (d.correct / total) * 100 : 0);
+        }, 0) / totalExams);
 
-    // Her öğrenci
-    students.sort().forEach(name => {
-        if (y > 230) { pdf.addPage(); y = 20; }
-        y = pdfStudentReport(pdf, name, cachedHistory, y);
-    });
+        pdf.setFontSize(11);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text(`Ogretmen: ${state.teacherName}    |    Kod: ${formatCode(state.teacherCode)}`, 15, y);
+        y += 7;
+        pdf.text(`Toplam: ${totalExams} sinav, ${students.length} ogrenci    |    Genel Ortalama: %${avgScore}`, 15, y);
+        y += 12;
 
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+        // Her öğrenci
+        students.sort().forEach(name => {
+            if (y > 230) { pdf.addPage(); y = 20; }
+            y = pdfStudentReport(pdf, name, cachedHistory, y);
+        });
 
-    pdf.save(`MatematikDehasi_Sinif_Raporu_${formatCode(state.teacherCode)}.pdf`);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+        pdf.save(`MatematikDehasi_Sinif_Raporu_${formatCode(state.teacherCode)}.pdf`);
+    } catch (err) {
+        console.error('PDF olusturma hatasi:', err);
+        alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
+    }
 };
 
 // Öğrenci sonuç ekranından PDF indirme
-window.downloadResultPDF = () => {
-    const pdf = createPDF();
-    let y = pdfHeader(pdf, 'Sinav Sonuc Raporu');
-
-    pdf.setFontSize(11);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text(`Ogrenci: ${state.studentName}`, 15, y);
-    y += 7;
-
-    const pctText = document.querySelector('.result-score-fill')?.parentElement?.nextElementSibling?.textContent || '';
-    const time = document.querySelector('.stat-time .stat-value')?.textContent || '';
-    pdf.text(`Sonuc: ${pctText.trim()}    |    Sure: ${time}`, 15, y);
-    y += 10;
-
-    // Soru detaylari
-    pdf.setFillColor(236, 240, 241);
-    pdf.rect(15, y, 180, 7, 'F');
-    pdf.setFontSize(9);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('#', 18, y + 5);
-    pdf.text('Soru', 30, y + 5);
-    pdf.text('Cevap', 110, y + 5);
-    pdf.text('Dogru Cevap', 145, y + 5);
-    y += 9;
-
-    cachedResults.forEach((r, i) => {
-        if (y > 275) { pdf.addPage(); y = 20; }
-        pdf.setTextColor(60, 60, 60);
-        pdf.text(`${i + 1}.`, 18, y + 4);
-        pdf.text(r.q || '', 30, y + 4);
-
-        if (r.status === 'correct') {
-            pdf.setTextColor(39, 174, 96);
-            pdf.text(String(r.correct), 110, y + 4);
-        } else if (r.status === 'wrong') {
-            pdf.setTextColor(231, 76, 60);
-            pdf.text(String(r.given), 110, y + 4);
-        } else {
-            pdf.setTextColor(150, 150, 150);
-            pdf.text('-', 110, y + 4);
+window.downloadResultPDF = async () => {
+    try {
+        if (!await ensureJsPDF()) {
+            alert('PDF kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.');
+            return;
         }
-        pdf.setTextColor(60, 60, 60);
-        pdf.text(String(r.correct), 145, y + 4);
-        y += 6;
-    });
+        if (!cachedResults || cachedResults.length === 0) {
+            alert('PDF oluşturmak için sınav sonucu bulunamadı.');
+            return;
+        }
 
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+        const pdf = createPDF();
+        let y = pdfHeader(pdf, 'Sinav Sonuc Raporu');
 
-    pdf.save(`MatematikDehasi_${state.studentName.replace(/\s+/g, '_')}_Sonuc.pdf`);
+        pdf.setFontSize(11);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text(`Ogrenci: ${state.studentName}`, 15, y);
+        y += 7;
+
+        const pctText = document.querySelector('.result-score-fill')?.parentElement?.nextElementSibling?.textContent || '';
+        const time = document.querySelector('.stat-time .stat-value')?.textContent || '';
+        pdf.text(`Sonuc: ${pctText.trim()}    |    Sure: ${time}`, 15, y);
+        y += 10;
+
+        // Soru detaylari
+        pdf.setFillColor(236, 240, 241);
+        pdf.rect(15, y, 180, 7, 'F');
+        pdf.setFontSize(9);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text('#', 18, y + 5);
+        pdf.text('Soru', 30, y + 5);
+        pdf.text('Cevap', 110, y + 5);
+        pdf.text('Dogru Cevap', 145, y + 5);
+        y += 9;
+
+        cachedResults.forEach((r, i) => {
+            if (y > 275) { pdf.addPage(); y = 20; }
+            pdf.setTextColor(60, 60, 60);
+            pdf.text(`${i + 1}.`, 18, y + 4);
+            pdf.text(r.q || '', 30, y + 4);
+
+            if (r.status === 'correct') {
+                pdf.setTextColor(39, 174, 96);
+                pdf.text(String(r.correct), 110, y + 4);
+            } else if (r.status === 'wrong') {
+                pdf.setTextColor(231, 76, 60);
+                pdf.text(String(r.given), 110, y + 4);
+            } else {
+                pdf.setTextColor(150, 150, 150);
+                pdf.text('-', 110, y + 4);
+            }
+            pdf.setTextColor(60, 60, 60);
+            pdf.text(String(r.correct), 145, y + 4);
+            y += 6;
+        });
+
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+        pdf.save(`MatematikDehasi_${state.studentName.replace(/\s+/g, '_')}_Sonuc.pdf`);
+    } catch (err) {
+        console.error('PDF olusturma hatasi:', err);
+        alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
+    }
 };
 
 // PDF öğrenci seçim listesini güncelle
