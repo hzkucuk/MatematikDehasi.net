@@ -1261,7 +1261,11 @@ function buildHistoryItem(d, anomalies, attemptCounts, dailyCounts) {
                 <div style="padding:10px; border-bottom:1px solid #eee;">
                     <b>${m.q}</b> → Doğru: ${m.r}, Seçilen: <span style="color:red">${m.y}</span>
                 </div>
-            `).join('') : "<p>Hata yok! 🎉</p>"}`;
+            `).join('') : (d.correct === 0 && (d.empty || 0) > 0
+                ? '<p style="color:#e67e22; font-weight:bold;">⬜ Tüm sorular boş bırakıldı.</p>'
+                : d.correct === 0 && d.wrong === 0
+                    ? '<p style="color:#888;">Soru detayı bulunamadı.</p>'
+                    : '<p>Hata yok! 🎉</p>')}`;
         document.getElementById('modal-detail').style.display = 'flex';
     };
     return item;
@@ -1597,14 +1601,14 @@ function renderRoster() {
 // Rozet / Başarı Sistemi
 // ================================================================
 const BADGE_DEFS = [
-    { id: 'first_quiz',    icon: '🎯', title: 'İlk Adım',          desc: 'İlk sınavını tamamladın!',          check: (h) => h.length >= 1 },
-    { id: 'five_quizzes',  icon: '🏅', title: '5 Sınav Tamam',     desc: '5 sınav çözdün!',                    check: (h) => h.length >= 5 },
-    { id: 'ten_quizzes',   icon: '🏆', title: '10 Sınav Şampiyonu', desc: '10 sınav çözdün, harikasın!',       check: (h) => h.length >= 10 },
+    { id: 'first_quiz',    icon: '🎯', title: 'İlk Adım',          desc: 'İlk sınavını tamamladın!',          check: (h) => h.filter(d => d.correct > 0 || d.wrong > 0).length >= 1 },
+    { id: 'five_quizzes',  icon: '🏅', title: '5 Sınav Tamam',     desc: '5 sınav çözdün!',                    check: (h) => h.filter(d => d.correct > 0 || d.wrong > 0).length >= 5 },
+    { id: 'ten_quizzes',   icon: '🏆', title: '10 Sınav Şampiyonu', desc: '10 sınav çözdün, harikasın!',       check: (h) => h.filter(d => d.correct > 0 || d.wrong > 0).length >= 10 },
     { id: 'perfect',       icon: '💯', title: 'Mükemmel Sınav',     desc: 'Bir sınavda %100 aldın!',           check: (h) => h.some(d => { const t = d.correct + d.wrong + (d.empty||0); return t > 0 && d.correct === t; }) },
     { id: 'streak3',       icon: '🔥', title: '3\'lü Seri',         desc: 'Arka arkaya 3 kez %80+ aldın!',    check: (h) => checkStreak(h, 80, 3) },
     { id: 'streak5',       icon: '🔥🔥', title: '5\'li Seri',       desc: 'Arka arkaya 5 kez %80+ aldın!',    check: (h) => checkStreak(h, 80, 5) },
     { id: 'fast_solver',   icon: '⚡', title: 'Hız Ustası',         desc: 'Bir sınavı 5 dakikadan kısa sürede bitirdin!', check: (h) => h.some(d => parseTime(d.timeTaken) > 0 && parseTime(d.timeTaken) < 300) },
-    { id: 'improver',      icon: '📈', title: 'Gelişim Göstergesi', desc: 'Son sınavın öncekinden en az 20 puan daha iyi!', check: (h) => checkImprovement(h, 20) },
+    { id: 'improver',      icon: '📈', title: 'Gelişim Göstergesi', desc: 'Son sınavın öncekinden en az 20 puan daha iyi!', check: (h) => checkImprovement(h.filter(d => d.correct > 0 || d.wrong > 0), 20) },
     { id: 'addition_master',       icon: '➕', title: 'Toplama Ustası',      desc: 'Toplamada %90+ aldın!', check: (h) => checkOpMastery(h, 'addition', 90) },
     { id: 'subtraction_master',    icon: '➖', title: 'Çıkarma Ustası',      desc: 'Çıkarmada %90+ aldın!', check: (h) => checkOpMastery(h, 'subtraction', 90) },
     { id: 'multiplication_master', icon: '✖️', title: 'Çarpma Ustası',       desc: 'Çarpmada %90+ aldın!', check: (h) => checkOpMastery(h, 'multiplication', 90) },
