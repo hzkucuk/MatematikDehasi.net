@@ -43,9 +43,9 @@
             <h2>📝 Öğretmen Kaydı</h2>
             <p>Bilgilerinizi girin, size özel bir sınıf kodu oluşturulacak.</p>
 
-            <div class="form-card">
+            <form class="form-card" onsubmit="return false" autocomplete="off">
                 <div class="form-section-label">🔒 Kurum Doğrulama</div>
-                <input type="password" id="reg-master" placeholder="Kurum Kayıt Şifresi">
+                <input type="password" id="reg-master" placeholder="Kurum Kayıt Şifresi" autocomplete="off">
                 <div class="form-section-label">👤 Kişisel Bilgiler</div>
                 <input type="text" id="reg-name" placeholder="Adınız Soyadınız" maxlength="50">
                 <div class="form-section-label">🏫 Sınıf Düzeyleri (birden fazla seçilebilir)</div>
@@ -59,11 +59,11 @@
                     <label class="grade-check-item"><input type="checkbox" value="7"><span>7. Sınıf</span></label>
                     <label class="grade-check-item"><input type="checkbox" value="8"><span>8. Sınıf</span></label>
                 </div>
-                <input type="password" id="reg-pin" placeholder="Şifre (en az 4 karakter)">
-                <input type="password" id="reg-pin2" placeholder="Şifre Tekrar">
-                <button class="btn btn-primary" onclick="registerTeacher()">Kayıt Ol</button>
-                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
-            </div>
+                <input type="password" id="reg-pin" placeholder="Şifre (en az 4 karakter)" autocomplete="new-password">
+                <input type="password" id="reg-pin2" placeholder="Şifre Tekrar" autocomplete="new-password">
+                <button type="button" class="btn btn-primary" onclick="registerTeacher()">Kayıt Ol</button>
+                <button type="button" class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </form>
         </div>
     </section>
 
@@ -85,13 +85,13 @@
         <div class="auth-card">
             <h2>👨‍🏫 Öğretmen Girişi</h2>
 
-            <div class="form-card">
+            <form class="form-card" onsubmit="return false" autocomplete="off">
                 <input type="text" id="login-code" placeholder="Sınıf Kodunuz (ör: K7M-3P9)" maxlength="7"
                        style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
-                <input type="password" id="login-pin" placeholder="Şifreniz">
-                <button class="btn btn-primary" onclick="teacherLogin()">Giriş Yap</button>
-                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
-            </div>
+                <input type="password" id="login-pin" placeholder="Şifreniz" autocomplete="current-password">
+                <button type="button" class="btn btn-primary" onclick="teacherLogin()">Giriş Yap</button>
+                <button type="button" class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </form>
         </div>
     </section>
 
@@ -113,10 +113,10 @@
 
         <div class="settings-card">
             <h4>🔐 Şifre Güncelleme</h4>
-            <div style="display:flex; gap:10px;">
-                <input type="password" id="new-pin-input" placeholder="Yeni Şifre">
-                <button class="btn btn-primary" id="save-pin-btn" onclick="updatePin()" style="width:auto">Kaydet</button>
-            </div>
+            <form onsubmit="return false" autocomplete="off" style="display:flex; gap:10px;">
+                <input type="password" id="new-pin-input" placeholder="Yeni Şifre" autocomplete="new-password">
+                <button type="button" class="btn btn-primary" id="save-pin-btn" onclick="updatePin()" style="width:auto">Kaydet</button>
+            </form>
         </div>
 
         <div class="settings-card">
@@ -213,10 +213,10 @@
         <div class="auth-card">
             <h2>🎒 Öğrenci Girişi</h2>
 
-            <div class="form-card">
+            <form class="form-card" onsubmit="return false" autocomplete="off">
                 <input type="text" id="student-code-input" placeholder="Öğretmen Kodunu Gir (ör: K7M-3P9)" maxlength="7"
                        style="text-transform:uppercase; text-align:center; font-size:1.3rem; letter-spacing:3px;">
-                <button class="btn btn-secondary" id="btn-validate-code" onclick="validateStudentCode()">🔍 Kodu Doğrula</button>
+                <button type="button" class="btn btn-secondary" id="btn-validate-code" onclick="validateStudentCode()">🔍 Kodu Doğrula</button>
 
                 <div id="student-grade-picker" style="display:none;">
                     <div class="form-section-label">📚 Sınıfını Seç</div>
@@ -231,19 +231,19 @@
                     <div id="student-pin-section" style="display:none;">
                         <div class="form-section-label" id="pin-section-title">🔑 Kişisel PIN</div>
                         <input type="password" id="student-pin" placeholder="4 haneli PIN" maxlength="6" inputmode="numeric"
-                               style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+                               style="text-align:center; letter-spacing:8px; font-size:1.2rem;" autocomplete="off">
                         <div id="student-pin-confirm-wrap" style="display:none; margin-top:10px;">
                             <input type="password" id="student-pin2" placeholder="PIN Tekrar" maxlength="6" inputmode="numeric"
-                                   style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+                                   style="text-align:center; letter-spacing:8px; font-size:1.2rem;" autocomplete="off">
                         </div>
                     </div>
 
                     <select id="operation-select"></select>
-                    <button class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
+                    <button type="button" class="btn btn-primary" onclick="studentLogin()">Teste Başla</button>
                 </div>
 
-                <button class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
-            </div>
+                <button type="button" class="btn btn-secondary" onclick="switchView('view-home')">← Geri Dön</button>
+            </form>
         </div>
     </section>
 
