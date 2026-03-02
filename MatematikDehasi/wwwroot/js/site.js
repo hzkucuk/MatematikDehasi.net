@@ -1858,18 +1858,27 @@ setTimeout(async () => {
 // ================================================================
 async function ensureJsPDF() {
     if (window.jspdf) return true;
-    try {
-        await new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
-            s.onload = resolve;
-            s.onerror = reject;
-            document.head.appendChild(s);
-        });
-        return !!window.jspdf;
-    } catch {
-        return false;
+    const cdnUrls = [
+        'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+        'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js'
+    ];
+    for (const url of cdnUrls) {
+        try {
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = url;
+                s.onload = resolve;
+                s.onerror = reject;
+                const timer = setTimeout(() => { s.onload = null; s.onerror = null; reject(); }, 8000);
+                s.onload = () => { clearTimeout(timer); resolve(); };
+                s.onerror = () => { clearTimeout(timer); reject(); };
+                document.head.appendChild(s);
+            });
+            if (window.jspdf) return true;
+        } catch { /* sonraki CDN'i dene */ }
     }
+    return false;
 }
 
 function createPDF() {
