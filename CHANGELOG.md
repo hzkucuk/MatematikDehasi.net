@@ -5,6 +5,17 @@ Format [Semantic Versioning](https://semver.org/lang/tr/) kurallarına uygundur.
 
 ---
 
+## [v2.0.1] --- 2025-07-15 --- 6. Sinif Basit Denklemler
+
+### Eklenen
+- 6. sinifa basit denklem cozme (mixed_equations) islemi eklendi
+- Mevcut sayi araliklari (+-50) ile otomatik denklem uretimi
+
+### Etkilenen Dosyalar
+site.js, docs/js/site.js, FEATURES.md, CHANGELOG.md
+
+---
+
 ## [v2.0.0] --- 2025-07-15 --- Cloudflare D1 Migrasyonu (Firebase Kaldırıldı)
 
 ### Değişen (BREAKING)

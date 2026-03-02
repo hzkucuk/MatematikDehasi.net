@@ -226,7 +226,7 @@ const GRADE_CONFIG = {
     },
     6: {
         label: '6. Sınıf',
-        operations: ['addition', 'subtraction', 'multiplication', 'division'],
+        operations: ['addition', 'subtraction', 'multiplication', 'division', 'mixed_equations'],
         questionCount: 30,
         useNegatives: true,
         addition:       { n1Min: -50,  n1Max: 50,  n2Min: -50, n2Max: 50 },

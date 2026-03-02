@@ -9,7 +9,7 @@
 | 3. Sınıf | +, −, ×, ÷ | 0-999, çarpma tablosu | 20 |
 | 4. Sınıf | +, −, ×, ÷ | 0-9999, çok basamaklı | 30 |
 | 5. Sınıf | +, −, ×, ÷ | 0-99999, büyük sayılar | 30 |
-| 6. Sınıf | +, −, ×, ÷ | Negatif dahil (±50) | 30 |
+| 6. Sınıf | +, −, ×, ÷, denklem | Negatif dahil (±50) | 30 |
 | 7. Sınıf | +, −, ×, ÷, denklem | Negatif (±100), bilinmeyen | 40 |
 | 8. Sınıf | +, −, ×, ÷, denklem | Genişletilmiş (±200) | 40 |
 
