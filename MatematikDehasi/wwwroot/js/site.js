@@ -1856,6 +1856,22 @@ setTimeout(async () => {
 // ================================================================
 // Özellik 8: PDF Rapor Oluşturma
 // ================================================================
+async function ensureJsPDF() {
+    if (window.jspdf) return true;
+    try {
+        await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+        return !!window.jspdf;
+    } catch {
+        return false;
+    }
+}
+
 function createPDF() {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -1979,110 +1995,144 @@ function pdfStudentReport(pdf, studentName, history, startY) {
     return y;
 }
 
-window.generateStudentPDF = () => {
+window.generateStudentPDF = async () => {
     const select = document.getElementById('pdf-student-select');
     if (!select) return;
     const studentName = select.value;
     if (!studentName) return alert('Lutfen bir ogrenci secin.');
 
-    const pdf = createPDF();
-    let y = pdfHeader(pdf, `Ogrenci Performans Raporu`);
-    y = pdfStudentReport(pdf, studentName, cachedHistory, y);
+    try {
+        if (!await ensureJsPDF()) {
+            alert('PDF kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.');
+            return;
+        }
 
-    // Alt bilgi
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+        const pdf = createPDF();
+        let y = pdfHeader(pdf, `Ogrenci Performans Raporu`);
+        y = pdfStudentReport(pdf, studentName, cachedHistory, y);
 
-    pdf.save(`MatematikDehasi_${studentName.replace(/\s+/g, '_')}_Rapor.pdf`);
+        // Alt bilgi
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+        pdf.save(`MatematikDehasi_${studentName.replace(/\s+/g, '_')}_Rapor.pdf`);
+    } catch (err) {
+        console.error('PDF olusturma hatasi:', err);
+        alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
+    }
 };
 
-window.generateClassPDF = () => {
+window.generateClassPDF = async () => {
     if (cachedHistory.length === 0) return alert('Henuz sinav verisi yok.');
 
-    const pdf = createPDF();
-    let y = pdfHeader(pdf, `Sinif Performans Raporu`);
+    try {
+        if (!await ensureJsPDF()) {
+            alert('PDF kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.');
+            return;
+        }
 
-    // Genel istatistik
-    const students = [...new Set(cachedHistory.map(d => d.studentName))];
-    const totalExams = cachedHistory.length;
-    const avgScore = Math.round(cachedHistory.reduce((s, d) => {
-        const total = d.correct + d.wrong + (d.empty || 0);
-        return s + (total > 0 ? (d.correct / total) * 100 : 0);
-    }, 0) / totalExams);
+        const pdf = createPDF();
+        let y = pdfHeader(pdf, `Sinif Performans Raporu`);
 
-    pdf.setFontSize(11);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text(`Ogretmen: ${state.teacherName}    |    Kod: ${formatCode(state.teacherCode)}`, 15, y);
-    y += 7;
-    pdf.text(`Toplam: ${totalExams} sinav, ${students.length} ogrenci    |    Genel Ortalama: %${avgScore}`, 15, y);
-    y += 12;
+        // Genel istatistik
+        const students = [...new Set(cachedHistory.map(d => d.studentName))];
+        const totalExams = cachedHistory.length;
+        const avgScore = Math.round(cachedHistory.reduce((s, d) => {
+            const total = d.correct + d.wrong + (d.empty || 0);
+            return s + (total > 0 ? (d.correct / total) * 100 : 0);
+        }, 0) / totalExams);
 
-    // Her öğrenci
-    students.sort().forEach(name => {
-        if (y > 230) { pdf.addPage(); y = 20; }
-        y = pdfStudentReport(pdf, name, cachedHistory, y);
-    });
+        pdf.setFontSize(11);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text(`Ogretmen: ${state.teacherName}    |    Kod: ${formatCode(state.teacherCode)}`, 15, y);
+        y += 7;
+        pdf.text(`Toplam: ${totalExams} sinav, ${students.length} ogrenci    |    Genel Ortalama: %${avgScore}`, 15, y);
+        y += 12;
 
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+        // Her öğrenci
+        students.sort().forEach(name => {
+            if (y > 230) { pdf.addPage(); y = 20; }
+            y = pdfStudentReport(pdf, name, cachedHistory, y);
+        });
 
-    pdf.save(`MatematikDehasi_Sinif_Raporu_${formatCode(state.teacherCode)}.pdf`);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+        pdf.save(`MatematikDehasi_Sinif_Raporu_${formatCode(state.teacherCode)}.pdf`);
+    } catch (err) {
+        console.error('PDF olusturma hatasi:', err);
+        alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
+    }
 };
 
 // Öğrenci sonuç ekranından PDF indirme
-window.downloadResultPDF = () => {
-    const pdf = createPDF();
-    let y = pdfHeader(pdf, 'Sinav Sonuc Raporu');
-
-    pdf.setFontSize(11);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text(`Ogrenci: ${state.studentName}`, 15, y);
-    y += 7;
-
-    const pctText = document.querySelector('.result-score-fill')?.parentElement?.nextElementSibling?.textContent || '';
-    const time = document.querySelector('.stat-time .stat-value')?.textContent || '';
-    pdf.text(`Sonuc: ${pctText.trim()}    |    Sure: ${time}`, 15, y);
-    y += 10;
-
-    // Soru detaylari
-    pdf.setFillColor(236, 240, 241);
-    pdf.rect(15, y, 180, 7, 'F');
-    pdf.setFontSize(9);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('#', 18, y + 5);
-    pdf.text('Soru', 30, y + 5);
-    pdf.text('Cevap', 110, y + 5);
-    pdf.text('Dogru Cevap', 145, y + 5);
-    y += 9;
-
-    cachedResults.forEach((r, i) => {
-        if (y > 275) { pdf.addPage(); y = 20; }
-        pdf.setTextColor(60, 60, 60);
-        pdf.text(`${i + 1}.`, 18, y + 4);
-        pdf.text(r.q || '', 30, y + 4);
-
-        if (r.status === 'correct') {
-            pdf.setTextColor(39, 174, 96);
-            pdf.text(String(r.correct), 110, y + 4);
-        } else if (r.status === 'wrong') {
-            pdf.setTextColor(231, 76, 60);
-            pdf.text(String(r.given), 110, y + 4);
-        } else {
-            pdf.setTextColor(150, 150, 150);
-            pdf.text('-', 110, y + 4);
+window.downloadResultPDF = async () => {
+    try {
+        if (!await ensureJsPDF()) {
+            alert('PDF kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.');
+            return;
         }
-        pdf.setTextColor(60, 60, 60);
-        pdf.text(String(r.correct), 145, y + 4);
-        y += 6;
-    });
+        if (!cachedResults || cachedResults.length === 0) {
+            alert('PDF oluşturmak için sınav sonucu bulunamadı.');
+            return;
+        }
 
-    pdf.setFontSize(8);
-    pdf.setTextColor(150, 150, 150);
-    pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+        const pdf = createPDF();
+        let y = pdfHeader(pdf, 'Sinav Sonuc Raporu');
 
-    pdf.save(`MatematikDehasi_${state.studentName.replace(/\s+/g, '_')}_Sonuc.pdf`);
+        pdf.setFontSize(11);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text(`Ogrenci: ${state.studentName}`, 15, y);
+        y += 7;
+
+        const pctText = document.querySelector('.result-score-fill')?.parentElement?.nextElementSibling?.textContent || '';
+        const time = document.querySelector('.stat-time .stat-value')?.textContent || '';
+        pdf.text(`Sonuc: ${pctText.trim()}    |    Sure: ${time}`, 15, y);
+        y += 10;
+
+        // Soru detaylari
+        pdf.setFillColor(236, 240, 241);
+        pdf.rect(15, y, 180, 7, 'F');
+        pdf.setFontSize(9);
+        pdf.setTextColor(44, 62, 80);
+        pdf.text('#', 18, y + 5);
+        pdf.text('Soru', 30, y + 5);
+        pdf.text('Cevap', 110, y + 5);
+        pdf.text('Dogru Cevap', 145, y + 5);
+        y += 9;
+
+        cachedResults.forEach((r, i) => {
+            if (y > 275) { pdf.addPage(); y = 20; }
+            pdf.setTextColor(60, 60, 60);
+            pdf.text(`${i + 1}.`, 18, y + 4);
+            pdf.text(r.q || '', 30, y + 4);
+
+            if (r.status === 'correct') {
+                pdf.setTextColor(39, 174, 96);
+                pdf.text(String(r.correct), 110, y + 4);
+            } else if (r.status === 'wrong') {
+                pdf.setTextColor(231, 76, 60);
+                pdf.text(String(r.given), 110, y + 4);
+            } else {
+                pdf.setTextColor(150, 150, 150);
+                pdf.text('-', 110, y + 4);
+            }
+            pdf.setTextColor(60, 60, 60);
+            pdf.text(String(r.correct), 145, y + 4);
+            y += 6;
+        });
+
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text('Bu rapor Matematik Dehasi tarafindan otomatik olusturulmustur.', 105, 285, { align: 'center' });
+
+        pdf.save(`MatematikDehasi_${state.studentName.replace(/\s+/g, '_')}_Sonuc.pdf`);
+    } catch (err) {
+        console.error('PDF olusturma hatasi:', err);
+        alert('PDF oluşturulamadı. Lütfen tekrar deneyin.');
+    }
 };
 
 // PDF öğrenci seçim listesini güncelle
