@@ -35,6 +35,10 @@ Her değişiklik sonrası:
 - **INSTALL.md:** NuGet / config / env değişikliğinde senkronize et.
 - Semantic versioning: breaking=MAJOR, yeni özellik=MINOR, düzeltme=PATCH.
 
+## Git İşlemleri
+- Her değişiklik tamamlandıktan sonra otomatik olarak `git add -A`, `git commit -m "mesaj"`, `git push origin master` çalıştır.
+- Kullanıcıdan onay bekleme, doğrudan push yap.
+
 ## Yanıt Formatı
 1. Değişiklik özeti (1-2 cümle)
 2. Sadece değişen kod bloğu
