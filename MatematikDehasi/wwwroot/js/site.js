@@ -164,9 +164,43 @@ let state = {
     studentName: "",
     operation: "addition",
     grade: 0,
+    difficulty: "normal",
     totalQs: 20,
     quiz: { questions: [], answers: {}, page: 0, seconds: 0, timer: null }
 };
+
+const DIFF_MAP = {
+    easy:   { label: 'Kolay', scale: 0.5, icon: '🟢' },
+    normal: { label: 'Orta',  scale: 1.0, icon: '🟡' },
+    hard:   { label: 'Zor',   scale: 1.5, icon: '🔴' }
+};
+
+function selectDifficulty(diff) {
+    state.difficulty = diff;
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.diff-btn[data-diff="${diff}"]`)?.classList.add('active');
+
+    if (state.teacherCode) {
+        api(`/teachers/${state.teacherCode}`, 'PUT', { difficulty: diff })
+            .then(() => {
+                const d = DIFF_MAP[diff];
+                alert(`✅ Zorluk seviyesi güncellendi: ${d.icon} ${d.label}`);
+            })
+            .catch(err => {
+                console.error("Zorluk güncelleme hatası:", err);
+                alert("Zorluk güncellenemedi: " + err.message);
+            });
+    }
+}
+window.selectDifficulty = selectDifficulty;
+
+function switchPanelTab(tabId) {
+    document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel-tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.panel-tab[data-tab="${tabId}"]`)?.classList.add('active');
+    document.getElementById(tabId)?.classList.add('active');
+}
+window.switchPanelTab = switchPanelTab;
 
 const PAGE_SIZE = 10;
 
@@ -369,12 +403,16 @@ window.teacherLogin = async () => {
         state.teacherName = data.name;
         state.teacherGrades = (data.grades || [1]).sort((a, b) => a - b);
         state.teacherTimeLimit = data.time_limit || data.timeLimit || 0;
+        state.difficulty = data.difficulty || 'normal';
 
         document.getElementById('teacher-panel-title').textContent = `${data.name} - Öğretmen Paneli 👨‍🏫`;
         document.getElementById('panel-code-badge').textContent = `KOD: ${formatCode(code)}`;
 
         const tlSelect = document.getElementById('panel-time-limit');
         if (tlSelect) tlSelect.value = String(state.teacherTimeLimit);
+
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`.diff-btn[data-diff="${state.difficulty}"]`)?.classList.add('active');
 
         renderGradeManagement();
         switchView('view-teacher-panel');
@@ -487,6 +525,14 @@ window.validateStudentCode = async () => {
         state.teacherName = data.name;
         state.teacherGrades = grades;
         state.teacherTimeLimit = data.time_limit || data.timeLimit || 0;
+        state.difficulty = data.difficulty || 'normal';
+
+        const diffDisplay = document.getElementById('student-difficulty-display');
+        if (diffDisplay) {
+            const d = DIFF_MAP[state.difficulty];
+            diffDisplay.textContent = `${d.icon} Zorluk: ${d.label}`;
+            diffDisplay.style.display = 'block';
+        }
 
         document.getElementById('btn-validate-code').style.display = 'none';
         document.getElementById('student-code-input').readOnly = true;
@@ -614,7 +660,8 @@ window.studentLogin = async () => {
     state.totalQs = GRADE_CONFIG[state.grade].questionCount;
     state.timeLimit = state.teacherTimeLimit || 0;
 
-    let title = `${GRADE_CONFIG[state.grade].label} — ${OP_MAP[state.operation].label}`;
+    const diff = DIFF_MAP[state.difficulty];
+    let title = `${GRADE_CONFIG[state.grade].label} — ${OP_MAP[state.operation].label} — ${diff.icon} ${diff.label}`;
     if (state.timeLimit > 0) title += ` (${state.timeLimit / 60}dk)`;
     document.getElementById('op-title').innerText = title;
 
@@ -636,7 +683,26 @@ function startQuiz() {
     state.quiz = { questions: [], answers: {}, page: 0, seconds: 0, timer: null };
     const seen = new Set();
     const gc = GRADE_CONFIG[state.grade];
+    const scale = DIFF_MAP[state.difficulty].scale;
     const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+    function scaleRange(cfg) {
+        if (scale === 1.0) return cfg;
+        const scaled = { ...cfg };
+        if (scaled.n1Max !== undefined) scaled.n1Max = Math.round(scaled.n1Max * scale) || 1;
+        if (scaled.n2Max !== undefined) scaled.n2Max = Math.round(scaled.n2Max * scale) || 1;
+        if (scaled.n1Min !== undefined && scaled.n1Min > 0) scaled.n1Min = Math.max(1, Math.round(scaled.n1Min * scale));
+        if (scaled.n2Min !== undefined && scaled.n2Min > 0) scaled.n2Min = Math.max(1, Math.round(scaled.n2Min * scale));
+        if (scaled.n1Min < 0) scaled.n1Min = Math.round(scaled.n1Min * scale);
+        if (scaled.n2Min < 0) scaled.n2Min = Math.round(scaled.n2Min * scale);
+        if (scaled.divMax !== undefined) scaled.divMax = Math.max(2, Math.round(scaled.divMax * scale));
+        if (scaled.quotMax !== undefined) {
+            const qm = Math.round(scaled.quotMax * scale);
+            scaled.quotMax = scaled.quotMax < 0 ? Math.min(-1, qm) : Math.max(1, qm);
+        }
+        if (scaled.quotMin !== undefined && scaled.quotMin < 0) scaled.quotMin = Math.round(scaled.quotMin * scale);
+        return scaled;
+    }
 
     while (state.quiz.questions.length < state.totalQs) {
         let n1, n2, result;
@@ -647,7 +713,7 @@ function startQuiz() {
             currentOp = ops[rand(0, ops.length - 1)];
         }
 
-        const cfg = gc[currentOp];
+        const cfg = scaleRange(gc[currentOp]);
 
         switch (currentOp) {
             case 'addition':
@@ -667,7 +733,7 @@ function startQuiz() {
                 result = n1 * n2;
                 break;
             case 'division': {
-                const dc = gc.division;
+                const dc = scaleRange(gc.division);
                 n2 = rand(dc.divMin, dc.divMax);
                 if (dc.negDiv && Math.random() > 0.5) n2 = -n2;
                 let q = rand(dc.quotMin, dc.quotMax);
