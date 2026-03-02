@@ -18,6 +18,35 @@ async function api(path, method = 'GET', body = null) {
 checkKvkkConsent();
 
 // ================================================================
+// Modern Onay Modalı (confirm yerine)
+// ================================================================
+function customConfirm({ title = 'Emin misiniz?', message = '', icon = '⚠️', okText = 'Tamam', cancelText = 'İptal', okClass = 'btn-primary' } = {}) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('custom-confirm-modal');
+        document.getElementById('confirm-icon').textContent = icon;
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-message').textContent = message;
+        const okBtn = document.getElementById('confirm-ok-btn');
+        const cancelBtn = document.getElementById('confirm-cancel-btn');
+        okBtn.textContent = okText;
+        cancelBtn.textContent = cancelText;
+        okBtn.className = `btn ${okClass}`;
+        modal.style.display = 'flex';
+
+        function cleanup(result) {
+            modal.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            resolve(result);
+        }
+        function onOk() { cleanup(true); }
+        function onCancel() { cleanup(false); }
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+    });
+}
+
+// ================================================================
 // Öğretmen Kodu Üretici
 // ================================================================
 const SAFE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -798,7 +827,17 @@ function updateQuizUI() {
 // Test Bitirme — Sonuç Kaydedilir
 // ================================================================
 window.confirmFinish = async () => {
-    if (Object.keys(state.quiz.answers).length < state.totalQs && !confirm("Boş sorularınız var. Bitirilsin mi?")) return;
+    if (Object.keys(state.quiz.answers).length < state.totalQs) {
+        const ok = await customConfirm({
+            icon: '📝',
+            title: 'Boş Sorular Var',
+            message: 'Bazı soruları boş bıraktın. Sınavı yine de bitirmek istiyor musun?',
+            okText: 'Evet, Bitir',
+            cancelText: 'Hayır, Devam Et',
+            okClass: 'btn-danger'
+        });
+        if (!ok) return;
+    }
     clearInterval(state.quiz.timer);
 
     let c = 0, w = 0, mistakes = [];
@@ -897,9 +936,13 @@ function renderResultView(correct, wrong, empty, time, pct, allResults) {
     switchView('view-result');
 }
 
-window.filterResults = (filter) => {
+window.filterResults = (filter, evt) => {
     document.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
+    if (evt && evt.target) {
+        evt.target.classList.add('active');
+    } else {
+        document.querySelector(`.result-tab[onclick*="'${filter}'"]`)?.classList.add('active');
+    }
 
     const container = document.getElementById('result-questions');
     container.innerHTML = '';
@@ -1519,14 +1562,14 @@ function renderBadgesInTeacherPanel(studentName) {
 window.renewTeacherCode = async () => {
     if (!state.teacherCode) return alert('Önce giriş yapın.');
 
-    const sure = confirm(
-        '⚠️ DİKKAT: Sınıf kodunuz değişecektir!\n\n' +
-        '• Yeni bir kod üretilecek\n' +
-        '• Tüm geçmiş ve öğrenci verileri yeni koda taşınacak\n' +
-        '• Eski kod artık çalışmayacak\n' +
-        '• Öğrencilere yeni kodu paylaşmanız gerekecek\n\n' +
-        'Devam etmek istiyor musunuz?'
-    );
+    const sure = await customConfirm({
+        icon: '🔄',
+        title: 'Kod Yenileme',
+        message: 'Sınıf kodunuz değişecek. Tüm geçmiş ve öğrenci verileri yeni koda taşınacak. Eski kod artık çalışmayacak. Devam etmek istiyor musunuz?',
+        okText: 'Evet, Yenile',
+        cancelText: 'Vazgeç',
+        okClass: 'btn-danger'
+    });
     if (!sure) return;
 
     const statusEl = document.getElementById('renew-status');
